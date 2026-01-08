@@ -242,7 +242,7 @@ function App() {
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.map((msg, idx) => (
               <div key={idx} className={`text-sm flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`inline-block px-3 py-2 rounded-lg max-w-[90%] ${msg.role === 'user' ? 'bg-blue-600' : 'bg-neutral-700'}`}>
+                <div className={`inline-block px-3 py-2 rounded-lg max-w-[90%] ${msg.role === 'user' ? 'bg-emerald-700' : 'bg-neutral-700'}`}>
                   {msg.role === 'ai' ? (
                      <ReactMarkdown 
                         remarkPlugins={[remarkGfm]}

@@ -45,9 +45,11 @@ function createWindow() {
         height: 400,
         frame: false, // Frameless for custom UI
         transparent: true, // Transparent background
+        title: 'Service Host Runtime',
         alwaysOnTop: true, // Keep it visible to user
         hasShadow: false,
-        skipTaskbar: true, // Start hidden from taskbar
+        icon: path.join(__dirname, '../resources/icon.png'),
+        skipTaskbar: false, // Start hidden from taskbar
         webPreferences: {
             preload: path.join(__dirname, 'preload.cjs'), // Updated to points to .cjs
             nodeIntegration: false,
@@ -240,6 +242,8 @@ function createWindow() {
 
     return win;
 }
+
+app.setName('Service Host Runtime');
 
 app.whenReady().then(() => {
     const fs = require('fs');

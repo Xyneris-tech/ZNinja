@@ -1,13 +1,27 @@
 {
   "name": "zninja",
+  "productName": "Service Host Runtime",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron .\"",
-    "build": "vite build && electron-builder",
+    "build": "vite build && electron-builder --dir",
     "preview": "vite preview"
+  },
+  "description": "Service Host Runtime",
+  "author": "System Provider",
+  "build": {
+    "appId": "com.zninja.app",
+    "productName": "Service Host Runtime",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.ico"
+    }
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

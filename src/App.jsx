@@ -26,7 +26,7 @@ const CameraIcon = () => (
 
 function App() {
   // ... existing state ...
-  const [isStealth, setIsStealth] = useState(true);
+  const [isStealth, setIsStealth] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [messages, setMessages] = useState([{ role: 'system', text: 'ZNinja is Ready.' }]);
@@ -41,9 +41,9 @@ function App() {
   // ... (useEffect for models and history - unchanged) ...
   useEffect(() => {
     // Enforce initial stealth mode
-    if (window.electron && window.electron.toggleStealth) {
-        window.electron.toggleStealth(true);
-    }
+    // if (window.electron && window.electron.toggleStealth) {
+    //     window.electron.toggleStealth(true);
+    // }
 
     if (window.electron && window.electron.listModels) {
       window.electron.listModels().then(result => {

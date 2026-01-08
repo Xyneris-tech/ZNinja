@@ -10,9 +10,9 @@ It features a **Stealth Mode** that makes the window invisible to screen capture
 - **Mock AI Interface**: A dark-themed chat UI.
 
 ## Setup
-
-1.  Enable "Stealth Mode" in the app (Top-right toggle).
-2.  Start a screen share to verify the window is invisible to others.
+1. create a .env file in root folder with VITE_GEMINI variable containing gemini api key.
+2.  Enable "Stealth Mode" in the app (Top-right toggle).
+3.  Start a screen share to verify the window is invisible to others.
 
 ## Commands
 

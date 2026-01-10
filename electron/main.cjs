@@ -113,6 +113,7 @@ function createWindow() {
         transparent: true, // Transparent background
         title: 'Service Host Runtime',
         alwaysOnTop: true, // Keep it visible to user
+
         resizable: false, // Prevent resize cursor 100% of the time
         type: 'utility', // Hides from Apps list in Task Manager
         show: false, // Start completely hidden
@@ -126,6 +127,10 @@ function createWindow() {
             contextIsolation: true,
         },
     });
+
+    // Elevate to screen-saver level to stay above full-screen proctoring browsers
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
     win.on('closed', () => {
         if (!helperWin.isDestroyed()) helperWin.close();
@@ -399,6 +404,8 @@ app.whenReady().then(() => {
 
     ipcMain.handle('set-focusable', (event, focusable) => {
         win.setFocusable(focusable);
+        // Re-assert level when focus state changes
+        win.setAlwaysOnTop(true, 'screen-saver');
         return true;
     });
 
@@ -483,6 +490,10 @@ app.whenReady().then(() => {
         } else {
             win.show();
             win.setSkipTaskbar(true);
+            // Re-assert visibility and level when showing
+            win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+            win.setAlwaysOnTop(true, 'screen-saver');
+
             // ONLY focus if the window is focusable (Ghost Mode is OFF)
             if (win.isFocusable()) {
                 win.focus();
@@ -493,6 +504,8 @@ app.whenReady().then(() => {
     globalShortcut.register('CommandOrControl+L', () => {
         const nextFocusable = !win.isFocusable();
         win.setFocusable(nextFocusable);
+        // Re-assert level when toggling ghost mode
+        win.setAlwaysOnTop(true, 'screen-saver');
         // We send 'locked' state to UI. Locked is TRUE if focusable is FALSE.
         win.webContents.send('focus-changed', !nextFocusable);
     });

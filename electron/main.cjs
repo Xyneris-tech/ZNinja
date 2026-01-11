@@ -35,7 +35,7 @@ if (!process.env.VITE_GEMINI) {
     require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 }
 
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
 const fs = require('fs');
 
 // --- Config Management ---
@@ -194,22 +194,38 @@ function createWindow() {
             // Note: If genAI.listModels is not available in the current SDK version, this will throw
             // and act as a fallback to the catch block, which is the desired behavior for now.
             let models = [];
-            // Attempt to list models if the method exists, otherwise simulate error or implement alternative
-            const genAI = getGenAI();
-            if (typeof genAI.listModels === 'function') {
-                const result = await genAI.listModels();
-                models = result.models
-                    .filter(m => m.supportedGenerationMethods.includes('generateContent'))
+            // The current SDK version doesn't expose listModels directly.
+            // We use the REST API instead.
+            const apiKey = getApiKey();
+            if (!apiKey) throw new Error("API Key not found");
+
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+            const data = await response.json();
+
+            if (data.models) {
+                models = data.models
+                    .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
                     .map(m => m.name.replace('models/', ''));
             } else {
-                throw new Error("genAI.listModels is not a function");
+                console.warn("REST API returned no models:", data);
             }
 
             return { success: true, models };
         } catch (error) {
             console.error('List Models Error:', error);
             // Fallback to the most likely free tier names if the fetch fails
-            return { success: true, models: ["gemini-2.5-flash", "gemini-3-flash-preview", "gemini-1.5-flash-002", "gemini-1.5-flash"] };
+            return {
+                success: true, models: [
+                    "gemini-2.0-flash-thinking-exp",
+                    "gemini-3-flash",
+                    "gemini-2.5-flash",
+                    "gemini-1.5-pro",
+                    "gemini-1.5-pro-002",
+                    "gemini-1.5-flash",
+                    "gemini-1.5-flash-8b",
+                    "gemini-1.0-pro"
+                ]
+            };
         }
     });
 
@@ -218,8 +234,10 @@ function createWindow() {
         // 2026 Update: Prioritize newer flash models, fall back to older ones
         const modelFallbacks = [
             modelName,
+            "gemini-2.0-flash-thinking-exp", // Try experimental thinking first if requested/available
+            "gemini-3-flash", // 2026 Stability Fallback
             "gemini-2.5-flash",
-            "gemini-3-flash-preview",
+            "gemini-1.5-pro",
             "gemini-1.5-flash-002",
             "gemini-1.5-flash"
         ].filter((v, i, a) => v && a.indexOf(v) === i); // Remove duplicates and nulls
@@ -257,8 +275,9 @@ function createWindow() {
 
 ${prompt || "Solve this problem."}`;
 
+
                     const contentParts = [
-                        textPrompt,
+                        { text: textPrompt },
                         {
                             inlineData: {
                                 data: base64Data,
@@ -266,20 +285,70 @@ ${prompt || "Solve this problem."}`;
                             }
                         }
                     ];
-                    result = await model.generateContent(contentParts);
+
+                    const genConfig = {
+                        maxOutputTokens: 65536
+                    };
+
+                    // Only add thinking config if model supports it (Gemini 2.0 Flash Thinking or Gemini 3 Flash)
+                    if (modelId.includes('thinking') || modelId.includes('gemini-3')) {
+                        genConfig.thinkingConfig = {
+                            includeThoughts: true,
+                            thinkingLevel: "HIGH"
+                        };
+                    }
+
+                    result = await model.generateContent({
+                        contents: [{ role: 'user', parts: contentParts }],
+                        generationConfig: genConfig,
+                        safetySettings: [
+                            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        ]
+                    });
                 } else {
                     // Multi-turn Text Chat
+                    const genConfig = {
+                        maxOutputTokens: 65536
+                    };
+
+                    if (modelId.includes('thinking') || modelId.includes('gemini-3')) {
+                        genConfig.thinkingConfig = {
+                            includeThoughts: true,
+                            thinkingLevel: "HIGH"
+                        };
+                    }
+
                     const chat = model.startChat({
                         history: history, // Pass the previous conversation
-                        generationConfig: {
-                            maxOutputTokens: 8192,
-                        },
+                        generationConfig: genConfig,
+                        safetySettings: [
+                            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                            // { category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY, threshold: HarmBlockThreshold.BLOCK_NONE } // Often strictly enforced, uncomment if SDK allows
+                        ]
                     });
 
                     result = await chat.sendMessage(prompt);
                 }
 
                 const response = await result.response;
+
+                // Crash-Proof Safety Check (2026 Standard)
+                if (response.promptFeedback && response.promptFeedback.blockReason) {
+                    console.warn(`Blocked by Internal Safety: ${response.promptFeedback.blockReason}`);
+                    throw new Error(`Example of refusal: ${response.promptFeedback.blockReason}`);
+                }
+
+                // Handle cases where 'candidates' might be empty due to safety or other reasons without throwing
+                if (!response.candidates || response.candidates.length === 0) {
+                    throw new Error("Response blocked or empty (Safety Filter triggered).");
+                }
+
                 const text = response.text();
                 // Return success immediately if one works
                 return { success: true, text, usedModel: modelId };

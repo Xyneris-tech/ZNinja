@@ -150,13 +150,25 @@ function App() {
 
   const fetchModels = () => {
     if (window.electron && window.electron.listModels) {
-      window.electron.listModels().then(result => {
-        if (result.success && result.models.length > 0) {
-          setAvailableModels(result.models);
-          const flashModel = result.models.find(m => m.includes('flash'));
-          setSelectedModel(flashModel || result.models[0]);
-        }
-      });
+      window.electron.listModels()
+        .then(result => {
+          if (result && result.success && Array.isArray(result.models) && result.models.length > 0) {
+            setAvailableModels(result.models);
+            // Default to 1.5-flash as it's the most reliable/fastest usually, 
+            // but respect user's last choice if possible (TODO: persist choice)
+            const flashModel = result.models.find(m => m.includes('1.5-flash'));
+            setSelectedModel(flashModel || result.models[0]);
+          } else {
+             // Fallback if API returns empty list (rare if key is valid)
+             console.warn("API returned no allowed models, using defaults.");
+             setAvailableModels(['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro']); 
+          }
+        })
+        .catch(err => {
+            console.error("Failed to fetch models:", err);
+             // Fallback on error
+             setAvailableModels(['gemini-1.5-flash', 'gemini-1.5-pro']);
+        });
     }
     loadSessions();
   };

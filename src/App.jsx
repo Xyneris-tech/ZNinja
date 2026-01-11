@@ -121,7 +121,7 @@ const ResizeHandle = () => {
     );
 };
 
-const CodeBlock = ({ inline, className, children, ...props }) => {
+  const CodeBlock = ({ inline, className, children, ...props }) => {
     const match = /language-(\w+)/.exec(className || '');
     const [isCopied, setIsCopied] = useState(false);
   
@@ -157,8 +157,9 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
     );
   };
 
-const AutoResizeTextarea = ({ value, onChange, onEnterPress, placeholder }) => {
-    const textareaRef = useRef(null);
+const AutoResizeTextarea = React.forwardRef(({ value, onChange, onEnterPress, placeholder }, ref) => {
+    const internalRef = useRef(null);
+    const textareaRef = ref || internalRef;
     const isManuallyResized = useRef(false);
   
     useEffect(() => {
@@ -226,7 +227,8 @@ const AutoResizeTextarea = ({ value, onChange, onEnterPress, placeholder }) => {
         </div>
       </div>
     );
-  };
+  });
+  AutoResizeTextarea.displayName = 'AutoResizeTextarea';
 
 function App() {
   // ... existing state ...
@@ -242,6 +244,8 @@ function App() {
   const [isClipboardSync, setIsClipboardSync] = useState(false);
   const [isSmartMode, setIsSmartMode] = useState(true); // Default to Smart Mode ON
   
+  const inputRef = useRef(null); // Ref for textarea control
+
   // Dynamic model state
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('gemini-1.5-flash-latest');
@@ -364,12 +368,52 @@ function App() {
 
         if (window.electron.onGhostKey) {
             unsubs.push(window.electron.onGhostKey((data) => {
+                const textarea = inputRef.current;
+                
+                // Get current selection/cursor position
+                // Note: In Ghost Mode, window might not be focused, but if user clicked, 
+                // selectionStart/End property on the DOM element usually persists.
+                const start = textarea ? textarea.selectionStart : inputValue.length;
+                const end = textarea ? textarea.selectionEnd : inputValue.length;
+                const currentVal = textarea ? textarea.value : inputValue;
+                
+                let nextVal = currentVal;
+                let nextCursorPos = start;
+
                 if (data.text === 'BACKSPACE') {
-                    setInputValue(prev => prev.slice(0, -1));
+                    if (start !== end) {
+                        // Delete Selection
+                        nextVal = currentVal.slice(0, start) + currentVal.slice(end);
+                        nextCursorPos = start;
+                    } else if (start > 0) {
+                        // Standard Backspace
+                        nextVal = currentVal.slice(0, start - 1) + currentVal.slice(end);
+                        nextCursorPos = start - 1;
+                    }
                 } else if (data.text === 'ENTER') {
                     document.getElementById('send-button')?.click();
+                    return; // Don't update input
                 } else {
-                    setInputValue(prev => prev + data.text);
+                    // Insert Character
+                     nextVal = currentVal.slice(0, start) + data.text + currentVal.slice(end);
+                     nextCursorPos = start + data.text.length;
+                }
+
+                setInputValue(nextVal);
+
+                // Restore Cursor Position (Requires timeout for React render cycle)
+                // Since this runs in an event handler, we might need to manually set it 
+                if (textarea) {
+                    // We need a slight delay to allow React to update the value first
+                    requestAnimationFrame(() => {
+                        textarea.selectionStart = nextCursorPos;
+                        textarea.selectionEnd = nextCursorPos;
+                        // Also auto-scroll to cursor
+                        textarea.blur();
+                        textarea.focus(); 
+                        textarea.blur(); // Quick blur/focus hack? Or just setting selection works?
+                        // On non-focused windows, setting selectionStart works but visual cursor might not show.
+                    });
                 }
             }));
         }
@@ -769,6 +813,7 @@ function App() {
           <form onSubmit={handleSend} className="w-full p-3 relative py-2 bg-neutral-800/50 flex flex-col items-end ">
             <div className="flex-1 min-w-full relative">
                 <AutoResizeTextarea
+                    ref={inputRef}
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onEnterPress={handleSend}

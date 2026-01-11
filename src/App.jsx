@@ -39,6 +39,9 @@ const KeyboardIcon = () => (
 const ResetIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
 );
+const ClipboardIcon = ({ opacity = 1 }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity }}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+);
 const SendIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.5003 12H5.41872M5.24634 12.7972L4.24158 15.7986C3.69128 17.4424 3.41613 18.2643 3.61359 18.7704C3.78506 19.21 4.15335 19.5432 4.6078 19.6701C5.13111 19.8161 5.92151 19.4604 7.50231 18.7491L17.6367 14.1886C19.1797 13.4942 19.9512 13.1471 20.1896 12.6648C20.3968 12.2458 20.3968 11.7541 20.1896 11.3351C19.9512 10.8529 19.1797 10.5057 17.6367 9.81135L7.48483 5.24303C5.90879 4.53382 5.12078 4.17921 4.59799 4.32468C4.14397 4.45101 3.77572 4.78336 3.60365 5.22209C3.40551 5.72728 3.67772 6.54741 4.22215 8.18767L5.24829 11.2793C5.34179 11.561 5.38855 11.7019 5.407 11.8459C5.42338 11.9738 5.42321 12.1032 5.40651 12.231C5.38768 12.375 5.34057 12.5157 5.24634 12.7972Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
 );
@@ -102,6 +105,7 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [isFocusLocked, setIsFocusLocked] = useState(false);
   const [isGhostTyping, setIsGhostTyping] = useState(false);
+  const [isClipboardSync, setIsClipboardSync] = useState(false);
   
   // Dynamic model state
   const [availableModels, setAvailableModels] = useState([]);
@@ -189,7 +193,9 @@ function App() {
 
         if (window.electron.onClipboardUpdate) {
             unsubs.push(window.electron.onClipboardUpdate((text) => {
-                setInputValue(text);
+                if (isClipboardSync) {
+                    setInputValue(text);
+                }
             }));
         }
 
@@ -217,7 +223,7 @@ function App() {
             if (typeof unsub === 'function') unsub();
         });
     };
-  }, []);
+  }, [isClipboardSync]);
 
   const toggleGhostTyping = async () => {
     if (window.electron && window.electron.setGhostTyping) {
@@ -329,7 +335,21 @@ function App() {
     if (window.electron && window.electron.askGemini) {
       setMessages(prev => [...prev, { role: 'ai', text: 'Thinking...', isTemp: true }]);
       
-      window.electron.askGemini({ prompt: userPrompt, modelName: selectedModel, image: currentAttachment }).then(result => {
+      // Prepare history for context (exclude temp & system messages, map to Gemini format)
+      // Gemini format: { role: 'user' | 'model', parts: [{ text: string }] }
+      const history = messages
+        .filter(m => !m.isTemp && m.role !== 'system')
+        .map(m => ({
+            role: m.role === 'ai' ? 'model' : 'user',
+            parts: [{ text: m.text }]
+        }));
+
+      window.electron.askGemini({ 
+          prompt: userPrompt, 
+          modelName: selectedModel, 
+          image: currentAttachment,
+          history: history // Send history
+      }).then(result => {
         setMessages(prev => {
           const filtered = prev.filter(m => !m.isTemp);
           return result.success 
@@ -351,12 +371,13 @@ function App() {
           style={vscDarkPlus}
           language={match[1]}
           PreTag="div"
+          customStyle={{ backgroundColor: 'rgba(38, 38, 38, 0.7)' }}
           {...props}
         >
           {String(children).replace(/\n$/, '')}
         </SyntaxHighlighter>
       ) : (
-        <code className={`${className} bg-neutral-800 rounded px-1 py-0.5 font-mono text-sm`} {...props}>
+        <code className={`${className} bg-neutral-800/40 rounded px-1 py-0.5 font-mono text-sm`} {...props}>
           {children}
         </code>
       );
@@ -421,7 +442,7 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-neutral-900/90 text-white rounded-lg border border-neutral-700 shadow-2xl overflow-hidden backdrop-blur-sm relative">
+    <div className="flex h-screen bg-neutral-900/50 text-white rounded-lg border border-neutral-700 shadow-2xl overflow-hidden backdrop-blur-sm relative">
       
       {/* Sidebar (History) */}
       <div className={`absolute inset-y-0 left-0 top-10 w-64 bg-neutral-800 transform transition-transform duration-300 z-50 ${showHistory ? 'translate-x-0' : '-translate-x-full'} border-r border-neutral-700 flex flex-col`} style={{ WebkitAppRegion: 'no-drag' }}>
@@ -458,7 +479,7 @@ function App() {
       <div className="flex-1 flex flex-col w-full relative">
           
           {/* Header */}
-          <div className="h-10 bg-neutral-800 flex items-center justify-between px-4 cursor-move" style={{ WebkitAppRegion: 'drag' }}>
+          <div className="h-10 bg-neutral-800/60 flex items-center justify-between px-4 cursor-move" style={{ WebkitAppRegion: 'drag' }}>
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${isStealth ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
               
@@ -526,6 +547,13 @@ function App() {
                     <span className="hidden sm:inline font-bold uppercase tracking-wider">{isFocusLocked ? 'Ghost ON' : 'Ghost OFF'}</span>
                 </button>
                 <button 
+                  onClick={() => setIsClipboardSync(!isClipboardSync)} 
+                  className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded transition-all duration-200 ${isClipboardSync ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]' : 'bg-neutral-700 text-neutral-400 hover:bg-neutral-600'}`}
+                >
+                    <ClipboardIcon opacity={isClipboardSync ? 1 : 0.5} />
+                    <span className="hidden sm:inline font-bold uppercase tracking-wider">{isClipboardSync ? 'Sync ON' : 'Sync OFF'}</span>
+                </button>
+                <button 
                   onClick={toggleStealth} 
                   className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded transition-all duration-200 ${isStealth ? 'bg-emerald-600 text-white shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-neutral-700 text-neutral-400 hover:bg-neutral-600'}`}
                 >
@@ -541,7 +569,7 @@ function App() {
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.map((msg, idx) => (
               <div key={idx} className={`text-sm flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`inline-block px-3 py-2 rounded-lg max-w-[90%] ${msg.role === 'user' ? 'bg-emerald-700' : 'bg-neutral-700'}`}>
+                <div className={`inline-block px-3 py-2 rounded-lg max-w-[90%] ${msg.role === 'user' ? 'bg-emerald-500/30' : 'bg-neutral-700/40'}`}>
                   {msg.image && (
                       <img src={msg.image} alt="Attachment" className="max-w-xs max-h-48 rounded mb-2 border border-neutral-600/50" />
                   )}
@@ -611,7 +639,20 @@ function App() {
                             setInputValue('');
                             setMessages(prev => [...prev, { role: 'ai', text: 'Thinking...', isTemp: true }]);
                             
-                            window.electron.askGemini({ prompt: userPrompt, modelName: selectedModel, image: result.image }).then(res => {
+                            // Context-aware Instant AI
+                            const history = messages
+                                .filter(m => !m.isTemp && m.role !== 'system')
+                                .map(m => ({
+                                    role: m.role === 'ai' ? 'model' : 'user',
+                                    parts: [{ text: m.text }]
+                                }));
+
+                            window.electron.askGemini({ 
+                                prompt: userPrompt, 
+                                modelName: selectedModel, 
+                                image: result.image,
+                                history: history 
+                            }).then(res => {
                                 setMessages(prev => {
                                     const filtered = prev.filter(m => !m.isTemp);
                                     return res.success 

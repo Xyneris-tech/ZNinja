@@ -178,7 +178,7 @@ function createWindow() {
         }
     });
 
-    ipcMain.handle('ask-gemini', async (event, { prompt, modelName, image }) => {
+    ipcMain.handle('ask-gemini', async (event, { prompt, modelName, image, history = [] }) => {
         // List of models to try in order of preference
         // 2026 Update: Prioritize newer flash models, fall back to older ones
         const modelFallbacks = [
@@ -189,18 +189,34 @@ function createWindow() {
             "gemini-1.5-flash"
         ].filter((v, i, a) => v && a.indexOf(v) === i); // Remove duplicates and nulls
 
+        const systemInstruction = `You are ZNinja, an elite Senior Software Engineer and Expert Packer. 
+Your goal is to provide precise, high-quality, and bug-free code, with best time complexity and less code lines possible. 
+Always use modern best practices. Be concise but thorough. 
+If asked for code, conduct a deep analysis before writing.`;
+
         for (const modelId of modelFallbacks) {
             if (!modelId) continue;
             try {
                 console.log(`Attempting Gemini (${modelId})...`);
                 const genAI = getGenAI();
-                const model = genAI.getGenerativeModel({ model: modelId });
 
-                let contentParts = [prompt];
+                // 1. Initialize Model with System Instruction
+                const model = genAI.getGenerativeModel({
+                    model: modelId,
+                    systemInstruction: systemInstruction
+                });
+
+                let result;
+
+                // 2. Handle Image Input (Single Turn) vs Text Chat (Multi-turn)
+                // Note: Gemini 'startChat' history format is strictly text-based for now in many SDK versions.
+                // If image is present, we often default to generateContent (single turn) or try to include it.
+
                 if (image) {
-                    // Expecting image as "data:image/png;base64,..."
+                    // Single Turn with Image (Context is limited for image requests usually)
+                    // We append previous history as text context if needed, or just send current prompt + image
                     const base64Data = image.split(',')[1];
-                    contentParts = [
+                    const contentParts = [
                         prompt,
                         {
                             inlineData: {
@@ -209,9 +225,19 @@ function createWindow() {
                             }
                         }
                     ];
+                    result = await model.generateContent(contentParts);
+                } else {
+                    // Multi-turn Text Chat
+                    const chat = model.startChat({
+                        history: history, // Pass the previous conversation
+                        generationConfig: {
+                            maxOutputTokens: 8192,
+                        },
+                    });
+
+                    result = await chat.sendMessage(prompt);
                 }
 
-                const result = await model.generateContent(contentParts);
                 const response = await result.response;
                 const text = response.text();
                 // Return success immediately if one works
@@ -223,11 +249,6 @@ function createWindow() {
                     continue;
                 }
 
-                // If it's a different error (like quota or safety), log it. 
-                // We might still want to try others if it's a specific model issue, 
-                // but usually other errors are blocking. 
-                // For now, let's treat 429 (Resource Exhausted) as a reason to maybe try a different tier model if available,
-                // but simpler to just return error for non-404s.
                 console.error(`Error with ${modelId}:`, error.message);
                 return { success: false, error: error.message };
             }

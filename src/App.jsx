@@ -51,6 +51,9 @@ const SendIcon = () => (
 const BrainIcon = ({ opacity = 1 }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity }}><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>
 );
+const CheckIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+);
 
 const ResizeHandle = () => {
     const startX = useRef(0);
@@ -99,6 +102,42 @@ const ResizeHandle = () => {
         </div>
     );
 };
+
+const CodeBlock = ({ inline, className, children, ...props }) => {
+    const match = /language-(\w+)/.exec(className || '');
+    const [isCopied, setIsCopied] = useState(false);
+  
+    const handleCopy = () => {
+      navigator.clipboard.writeText(String(children));
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    };
+  
+    return !inline && match ? (
+      <div className="relative group">
+        <button 
+          onClick={handleCopy}
+          className="absolute top-2 right-2 p-1.5 rounded-md bg-neutral-700/50 hover:bg-neutral-600 text-neutral-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-200 z-10"
+          title="Copy code"
+        >
+          {isCopied ? <CheckIcon /> : <ClipboardIcon />}
+        </button>
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={match[1]}
+          PreTag="div"
+          customStyle={{ backgroundColor: 'rgba(38, 38, 38, 0.7)', margin: 0, borderRadius: '0.5rem' }}
+          {...props}
+        >
+          {String(children).replace(/\n$/, '')}
+        </SyntaxHighlighter>
+      </div>
+    ) : (
+      <code className={`${className} bg-neutral-800/40 rounded px-1 py-0.5 font-mono text-sm`} {...props}>
+        {children}
+      </code>
+    );
+  };
 
 function App() {
   // ... existing state ...
@@ -413,24 +452,7 @@ function App() {
   // Keeping existing component definitions for markdown renderer...
   const components = {
     // ... existing components ...
-    code({node, inline, className, children, ...props}) {
-      const match = /language-(\w+)/.exec(className || '');
-      return !inline && match ? (
-        <SyntaxHighlighter
-          style={vscDarkPlus}
-          language={match[1]}
-          PreTag="div"
-          customStyle={{ backgroundColor: 'rgba(38, 38, 38, 0.7)' }}
-          {...props}
-        >
-          {String(children).replace(/\n$/, '')}
-        </SyntaxHighlighter>
-      ) : (
-        <code className={`${className} bg-neutral-800/40 rounded px-1 py-0.5 font-mono text-sm`} {...props}>
-          {children}
-        </code>
-      );
-    },
+    code: CodeBlock,
     p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
     ul: ({children}) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
     ol: ({children}) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,

@@ -266,7 +266,7 @@ function createWindow() {
         }
     });
 
-    ipcMain.handle('ask-gemini', async (event, { prompt, modelName, image, history = [] }) => {
+    ipcMain.handle('ask-gemini', async (event, { prompt, modelName, images, image, history = [] }) => {
         let smartFallbacks = [];
         const isPro = await checkTierInternal(); // Recommended: Helper to detect if key is Paid
 
@@ -328,29 +328,32 @@ function createWindow() {
                 // Note: Gemini 'startChat' history format is strictly text-based for now in many SDK versions.
                 // If image is present, we often default to generateContent (single turn) or try to include it.
 
-                if (image) {
+                // Normalize images
+                const allImages = images || (image ? [image] : []);
+
+                if (allImages.length > 0) {
                     // Single Turn with Image
-                    const base64Data = image.split(',')[1];
 
                     // Vision Chain-of-Thought Injection
-                    // Force the model to "Read" before "Solving" to prevent hallucination.
                     const textPrompt = `[SYSTEM: VISION MODE ACTIVATED]
-1. TRANSCRIPT: First, strictly transcribe the full problem text from the image. Do not summarize.
+1. TRANSCRIPT: First, strictly transcribe the full problem text from the images. Do not summarize.
 2. ANALYZE: Apply the "Elite Programmer" protocol to the transcribed text.
 3. SOLVE: Provide the solution code.
 
 ${prompt || "Solve this problem."}`;
 
 
-                    const contentParts = [
-                        { text: textPrompt },
-                        {
+                    const contentParts = [{ text: textPrompt }];
+
+                    allImages.forEach(img => {
+                        const base64Data = img.split(',')[1];
+                        contentParts.push({
                             inlineData: {
                                 data: base64Data,
                                 mimeType: "image/png"
                             }
-                        }
-                    ];
+                        });
+                    });
 
                     const genConfig = {
                         maxOutputTokens: 65536

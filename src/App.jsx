@@ -107,7 +107,7 @@ function App() {
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [messages, setMessages] = useState([{ role: 'system', text: 'ZNinja is Ready.' }]);
   const [inputValue, setInputValue] = useState('');
-  const [attachment, setAttachment] = useState(null);
+  const [attachments, setAttachments] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isFocusLocked, setIsFocusLocked] = useState(false);
   const [isGhostTyping, setIsGhostTyping] = useState(false);
@@ -356,7 +356,7 @@ function App() {
       if (window.electron && window.electron.captureScreen) {
           const result = await window.electron.captureScreen();
           if (result.success) {
-              setAttachment(result.image);
+              setAttachments(prev => [...prev, result.image]);
           } else {
               console.error(result.error);
               setMessages(prev => [...prev, { role: 'ai', text: `Screen Capture Failed: ${result.error}` }]);
@@ -371,11 +371,11 @@ function App() {
     if (!currentSessionId) setCurrentSessionId(Date.now().toString());
 
     const userPrompt = inputValue;
-    const currentAttachment = attachment; // Capture current attachment
+    const currentAttachments = attachments; // Capture current attachments
     
-    setMessages(prev => [...prev, { role: 'user', text: userPrompt, image: currentAttachment }]);
+    setMessages(prev => [...prev, { role: 'user', text: userPrompt, images: currentAttachments }]);
     setInputValue('');
-    setAttachment(null);
+    setAttachments([]);
     
     if (window.electron && window.electron.askGemini) {
       setMessages(prev => [...prev, { role: 'ai', text: 'Thinking...', isTemp: true }]);
@@ -396,7 +396,7 @@ function App() {
       window.electron.askGemini({ 
           prompt: userPrompt, 
           modelName: actualModel, 
-          image: currentAttachment,
+          images: currentAttachments,
           history: history // Send history
       }).then(result => {
         setMessages(prev => {
@@ -639,8 +639,11 @@ function App() {
             {messages.map((msg, idx) => (
               <div key={idx} className={`text-sm flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`inline-block px-3 py-2 rounded-lg max-w-[90%] ${msg.role === 'user' ? 'bg-emerald-500/30' : 'bg-neutral-700/40'}`}>
-                  {msg.image && (
-                      <img src={msg.image} alt="Attachment" className="max-w-xs max-h-48 rounded mb-2 border border-neutral-600/50" />
+                  {msg.images && msg.images.map((img, i) => (
+                      <img key={i} src={img} alt={`Attachment ${i}`} className="max-w-xs max-h-48 rounded mb-2 border border-neutral-600/50 block" />
+                  ))}
+                  {msg.image && !msg.images && (
+                      <img src={msg.image} alt="Attachment" className="max-w-xs max-h-48 rounded mb-2 border border-neutral-600/50 block" />
                   )}
                   {msg.role === 'ai' ? (
                      <ReactMarkdown 
@@ -667,16 +670,20 @@ function App() {
                 placeholder="Ask ZNinja..."
                 className="w-full bg-neutral-900 border border-neutral-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition-colors duration-200 pr-10"
             />
-            {attachment && (
-                <div className="absolute bottom-14 left-4 z-10 w-24 h-16 border border-neutral-600 bg-black rounded overflow-hidden shadow-lg group">
-                    <img src={attachment} className="w-full h-full object-cover opacity-70" alt="Screen Capture" />
-                    <button 
-                        type="button"
-                        onClick={() => setAttachment(null)}
-                        className="absolute top-0 right-0 p-0.5 bg-red-600 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all duration-200"
-                    >
-                        <XIcon />
-                    </button>
+            {attachments.length > 0 && (
+                <div className="absolute bottom-14 left-4 z-10 flex gap-2 overflow-x-auto max-w-[calc(100%-6rem)] p-1 scrollbar-thin scrollbar-thumb-neutral-600">
+                    {attachments.map((img, idx) => (
+                        <div key={idx} className="relative w-24 h-16 border border-neutral-600 bg-black rounded overflow-hidden shadow-lg group shrink-0">
+                            <img src={img} className="w-full h-full object-cover opacity-70" alt={`Attachment ${idx}`} />
+                            <button 
+                                type="button"
+                                onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                className="absolute top-0 right-0 p-0.5 bg-red-600 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all duration-200"
+                            >
+                                <XIcon />
+                            </button>
+                        </div>
+                    ))}
                 </div>
             )}
              <button
@@ -705,7 +712,7 @@ function App() {
                         // Directly trigger Gemini with the captured image and current input
                         if (window.electron && window.electron.askGemini) {
                             const userPrompt = inputValue || "give answer";
-                            setMessages(prev => [...prev, { role: 'user', text: userPrompt, image: result.image }]);
+                            setMessages(prev => [...prev, { role: 'user', text: userPrompt, images: [result.image] }]);
                             setInputValue('');
                             setMessages(prev => [...prev, { role: 'ai', text: 'Thinking...', isTemp: true }]);
                             
@@ -720,7 +727,7 @@ function App() {
                             window.electron.askGemini({ 
                                 prompt: userPrompt, 
                                 modelName: selectedModel, 
-                                image: result.image,
+                                images: [result.image],
                                 history: history 
                             }).then(res => {
                                 setMessages(prev => {

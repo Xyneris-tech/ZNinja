@@ -263,13 +263,25 @@ function createWindow() {
                 // Return success immediately if one works
                 return { success: true, text, usedModel: modelId };
             } catch (error) {
-                // If 404 Not Found, Log and Continue
-                if (error.message.includes('404') || error.message.includes('not found')) {
-                    console.warn(`${modelId} failed with 404, trying next...`);
+                const isRetryable =
+                    error.message.includes('404') ||
+                    error.message.includes('not found') ||
+                    error.message.includes('429') ||
+                    error.message.includes('quota') ||
+                    error.message.includes('limit') ||
+                    error.message.includes('503') ||
+                    error.message.includes('unavailable') ||
+                    error.message.includes('overloaded');
+
+                if (isRetryable) {
+                    console.warn(`${modelId} failed (Status: ${error.message}), trying next fallback...`);
                     continue;
                 }
 
                 console.error(`Error with ${modelId}:`, error.message);
+                // Return immediately if it's a fundamental error (like invalid key, though 'invalid' check might vary)
+                // For safety, we could also continue on almost *any* error during this loop, 
+                // but let's stick to the specific ones requested by user plus common server issues.
                 return { success: false, error: error.message };
             }
         }

@@ -10,14 +10,17 @@ html, body {
 
 /* Custom scrollbar for chat */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
+}
+::-webkit-scrollbar {
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #4b5563;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #6b7280;

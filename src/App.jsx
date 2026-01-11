@@ -139,6 +139,77 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
     );
   };
 
+const AutoResizeTextarea = ({ value, onChange, onEnterPress, placeholder }) => {
+    const textareaRef = useRef(null);
+    const isManuallyResized = useRef(false);
+  
+    useEffect(() => {
+      const textarea = textareaRef.current;
+      if (textarea && !isManuallyResized.current) {
+        textarea.style.height = 'auto';
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+      }
+    }, [value]);
+
+    const handleMouseDown = (e) => {
+        // Prevent default to avoid selection issues
+        e.preventDefault();
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const startY = e.clientY;
+        const startHeight = textarea.offsetHeight;
+        isManuallyResized.current = true;
+
+        const onMouseMove = (moveEvent) => {
+            const deltaY = moveEvent.clientY - startY;
+            const newHeight = Math.max(38, startHeight + deltaY); // Min height 38px
+            textarea.style.height = `${newHeight}px`;
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    };
+  
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        // Reset manual resize on send
+        isManuallyResized.current = false;
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+        onEnterPress(e);
+      }
+    };
+  
+    return (
+      <div className="relative w-full group/textarea">
+        <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={onChange}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            rows={1}
+            className="w-full bg-neutral-900 border border-neutral-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition-colors duration-200 resize-none overflow-hidden hover:overflow-y-auto"
+            style={{ minHeight: '38px', maxHeight: isManuallyResized.current ? 'none' : '200px' }} 
+        />
+        {/* Custom Resize Handle */}
+        <div 
+            onMouseDown={handleMouseDown}
+            className="absolute bottom-[6px] -left-0  flex justify-center items-center  transition-opacity duration-200 group rounded"
+            
+        >
+            <svg className='rotate-90 group-hover:opacity-100 opacity-40 w-6 h-6 ' width="64px" height="64px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M10 20L20 20L20 10" stroke="#ffffff"></path> <path d="M12 17L17 17L17 12" stroke="#ffffff"></path> </g></svg>
+        </div>
+      </div>
+    );
+  };
+
 function App() {
   // ... existing state ...
   const [isStealth, setIsStealth] = useState(false);
@@ -683,15 +754,15 @@ function App() {
             ))}
           </div>
 
-          <form onSubmit={handleSend} className="p-3 relative py-2 bg-neutral-800/50">
-            <input
-                type="text"
-                id="main-input"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Ask ZNinja..."
-                className="w-full bg-neutral-900 border border-neutral-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition-colors duration-200 pr-10"
-            />
+          <form onSubmit={handleSend} className="w-full p-3 relative py-2 bg-neutral-800/50 flex flex-col items-end ">
+            <div className="flex-1 min-w-full relative">
+                <AutoResizeTextarea
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onEnterPress={handleSend}
+                    placeholder="Ask ZNinja..."
+                />
+            </div>
             {attachments.length > 0 && (
                 <div className="absolute bottom-14 left-4 z-10 flex gap-2 overflow-x-auto max-w-[calc(100%-6rem)] p-1 scrollbar-thin scrollbar-thumb-neutral-600">
                     {attachments.map((img, idx) => (
@@ -711,19 +782,19 @@ function App() {
              <button
                 type="submit"
                 id="send-button"
-                className="absolute right-12 top-4 p-1 hover:bg-neutral-400/30 rounded-md text-neutral-200 transition-colors duration-200"
+                className="absolute right-12 bottom-[2.3rem] p-1 hover:bg-neutral-400/30 rounded-md text-neutral-200 transition-colors duration-200"
              >
                 <SendIcon />
              </button>
              <button
                 type="button"
-                className="absolute right-5 top-4 p-1 hover:bg-neutral-400/30 rounded-md text-neutral-200 transition-colors duration-200"
+                className="absolute right-5 bottom-[2.3rem] p-1 hover:bg-neutral-400/30 rounded-md text-neutral-400 hover:text-white transition-colors duration-200 z-10"
                 onClick={handleCapture}
-                
+                title="Capture Screen"
             >
                 <CameraIcon />
             </button>
-            <span className='text-xs w-full flex justify-center items-center pt-2'>powered by CInfinite, developed by <a href="https://github.com/gajju44" target="_blank" rel="noopener noreferrer">&nbsp;gajju44</a></span>
+            <span className='text-xs w-full flex justify-center items-center '>powered by CInfinite, developed by <a href="https://github.com/gajju44" target="_blank" rel="noopener noreferrer">&nbsp;gajju44</a></span>
             <button
                 id="instant-ai-trigger"
                 type="button"

@@ -1,4 +1,4 @@
-# 🥷 ZNinja - Service Host Runtime (v2.0.0)
+# 🥷 ZNinja - Service Host Runtime (v2.2.0)
 
 The ultimate stealth assistant. Designed to be invisible to monitoring software and seamless to use without ever leaving your browser.
 
@@ -20,16 +20,20 @@ The ultimate stealth assistant. Designed to be invisible to monitoring software 
 ### 3. ⌨️ Ghost Typing (Background Input)
 **Visual:** `[ ⌨️ Type ON ]` (Amber Button)
 - **How it works:** When Ghost Mode is ON, this button appears.
-- **Action:** Click anywhere else (like your browser's search bar) and start typing. Your text will appear in ZNinja automatically.
+- **Action:** Click anywhere else (like your browser's search bar) and start typing using standard keys (A-Z, 0-9). Your text will appear in ZNinja automatically.
 - **Why use it:** Input questions into the AI without the AI window ever getting "Focus."
 
-### 4. 📸 Instant AI
+### 4. 📸 Instant AI (Multi-Image Support)
 - **Shortcut:** `Ctrl + I`
-- **What it does:** Takes a silent screenshot and sends it to the AI along with your current text. 
-- **Easy Flow:** Type a question -> `Ctrl + I` -> Get answer.
+- **What it does:** Takes a silent screenshot and attaches it.
+- **New:** You can now capture **multiple screenshots** and send them all at once.
+- **Easy Flow:** Type a question -> `Ctrl + I` -> `Ctrl + I` (another one) -> Send.
 
 ### 5. 📋 Clipboard Sync
 - **What it does:** Anything you copy (`Ctrl + C`) anywhere on your computer is automatically pasted into ZNinja's input box.
+
+### 6. 📝 Code Copy
+- **New:** Code blocks now have a copy button for one-click extraction.
 
 ---
 
@@ -43,17 +47,29 @@ The ultimate stealth assistant. Designed to be invisible to monitoring software 
 
 ## 📦 How to Use
 
-1. **Setup:** Add your Gemini API Key in the `.env` file (`VITE_GEMINI=your_key`).
+1. **Setup:** Add your Gemini API Key in the `.env` file (`VITE_GEMINI=your_key`) or use the Setup Screen UI.
 2. **Launch:** Run `npm run dev`.
 3. **Show/Hide:** Use `Ctrl + ]` to instantly show or hide the entire window.
 4. **Resizing:** Look for the tiny lines at the bottom-right corner to drag and resize.
 
 ---
 
-## 💻 Tech Stack
-- **Frontend:** React + Vite + Tailwind CSS
-- **Backend:** Electron (Node.js)
-- **Native:** Windows API (koffi) for stealth affinity and global key monitoring.
+## 💻 Tech Stack Refactoring (v2.2)
+
+We have significantly modularized the codebase for easier maintenance:
+
+### Frontend (`src/`)
+- **`SetupScreen`**: Configuration UI.
+- **`TitleBar`**: Window controls and mode toggles.
+- **`ChatHistorySidebar`**: Session management.
+- **`ChatInterface`**: Message list, attachments, and input area.
+
+### Backend (`electron/`)
+- **`main.cjs`**: App lifecycle and orchestration.
+- **`native.js`**: Low-level Windows API bindings (Koffi).
+- **`config.js`**: Key and Session persistence.
+- **`gemini.js`**: AI Model routing and API logic.
 
 ---
+
 *Powered by Cinfinite | Developed by gajju44*

@@ -2,9 +2,9 @@ const { app, BrowserWindow, ipcMain, desktopCapturer, globalShortcut, clipboard 
 const path = require('path');
 
 // --- Load Modules ---
-const config = require('./config');
-const native = require('./native');
-const gemini = require('./gemini');
+const config = require('./config.cjs');
+const native = require('./native.cjs');
+const gemini = require('./gemini.cjs');
 
 // --- Environment Setup ---
 require('dotenv').config({ path: path.join(__dirname, '../.env') });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import SetupScreen from './components/SetupScreen';
 import TitleBar from './components/TitleBar';
 import ChatHistorySidebar from './components/ChatHistorySidebar';
@@ -297,7 +297,7 @@ function App() {
     }
   };
 
-  const handleCapture = async () => {
+  const handleCapture = useCallback(async () => {
       if (window.electron && window.electron.captureScreen) {
           const result = await window.electron.captureScreen();
           if (result.success) {
@@ -307,9 +307,9 @@ function App() {
               setMessages(prev => [...prev, { role: 'ai', text: `Screen Capture Failed: ${result.error}` }]);
           }
       }
-  };
+  }, []);
 
-  const handleSend = (e) => {
+  const handleSend = useCallback((e) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
     
@@ -352,9 +352,9 @@ function App() {
         });
       });
     }
-  };
+  }, [inputValue, currentSessionId, attachments, messages, isSmartMode, selectedModel]);
 
-  const handleSendAudio = (audioBase64) => {
+  const handleSendAudio = useCallback((audioBase64) => {
       if (window.electron && window.electron.askGemini) {
           if (!currentSessionId) setCurrentSessionId(Date.now().toString());
           
@@ -389,7 +389,7 @@ function App() {
               });
           });
       }
-  };
+  }, [currentSessionId, messages, isSmartMode, selectedModel]);
 
 
 

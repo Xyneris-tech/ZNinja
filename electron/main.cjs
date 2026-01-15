@@ -106,9 +106,8 @@ function createWindow() {
             });
 
             if (filePath) {
-                // Convert base64 to buffer if needed, but here we expect base64 string
-                const data = Buffer.from(buffer.split(',')[1], 'base64');
-                fs.writeFileSync(filePath, data);
+                // Buffer is received as Uint8Array from renderer
+                fs.writeFileSync(filePath, Buffer.from(buffer));
                 return { success: true, filePath };
             }
             return { success: false, error: 'Cancelled' };

@@ -1,9 +1,37 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 import { MicIcon, StopCircleIcon, SaveIcon, PlayIcon, PauseIcon, VideoIcon, ChevronLeftIcon } from './Icons';
+
+// Extracted Timer Component to prevent parent re-renders
+const RecordingTimer = memo(({ isRecording }) => {
+    const [time, setTime] = useState(0);
+
+    useEffect(() => {
+        let interval;
+        if (isRecording) {
+            setTime(0);
+            interval = setInterval(() => {
+                setTime(prev => prev + 1);
+            }, 1000);
+        } else {
+            setTime(0);
+        }
+        return () => clearInterval(interval);
+    }, [isRecording]);
+
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    if (!isRecording) return null;
+
+    return <span className="text-xs text-red-200 font-mono w-10">{formatTime(time)}</span>;
+});
 
 const MeetingRecorder = ({ onRecordingComplete }) => {
     const [isRecording, setIsRecording] = useState(false);
-    const [recordingTime, setRecordingTime] = useState(0);
+    // Removed recordingTime state from here to prevent re-renders
     const [error, setError] = useState(null);
     const [reviewMode, setReviewMode] = useState(false);
     const [recordedBlob, setRecordedBlob] = useState(null);
@@ -15,7 +43,6 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
     const mediaRecorderRef = useRef(null);
     const audioContextRef = useRef(null);
     const streamsRef = useRef([]);
-    const timerRef = useRef(null);
     const chunksRef = useRef([]);
     const audioRef = useRef(null);
 
@@ -26,16 +53,13 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
     }, []);
 
     const stopRecordingAndCleanup = () => {
-        if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-        }
-
         // Stop all tracks
-        streamsRef.current.forEach(stream => {
-            stream.getTracks().forEach(track => track.stop());
-        });
-        streamsRef.current = [];
+        if (streamsRef.current) {
+            streamsRef.current.forEach(stream => {
+                 if (stream) stream.getTracks().forEach(track => track.stop());
+            });
+            streamsRef.current = [];
+        }
 
         // Close Audio Context
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -46,7 +70,6 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
     const startRecording = async (selectedMode) => {
         setError(null);
         setIsRecording(true);
-        setRecordingTime(0);
         setMode(selectedMode); 
         setIsExpanded(false); // Collapse menu on start
         chunksRef.current = [];
@@ -140,11 +163,6 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
 
             recorder.start(1000); 
 
-            // Start Timer
-            timerRef.current = setInterval(() => {
-                setRecordingTime(prev => prev + 1);
-            }, 1000);
-
         } catch (e) {
             console.error("Recording Start Error:", e);
             setError("Failed to start recording: " + e.message);
@@ -163,7 +181,6 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
     const handleDiscard = () => {
         setReviewMode(false);
         setRecordedBlob(null);
-        setRecordingTime(0);
         setIsPlaying(false);
     };
 
@@ -188,15 +205,16 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
         setError("Saving..."); 
 
         const reader = new FileReader();
-        reader.readAsDataURL(recordedBlob);
+        // Use ArrayBuffer for performance
+        reader.readAsArrayBuffer(recordedBlob);
         reader.onloadend = async () => {
-            const base64data = reader.result;
+            const buffer = new Uint8Array(reader.result);
             try {
                 const ext = mode === 'video' ? 'webm' : 'webm';
                 const prefix = mode === 'video' ? 'recording' : 'meeting';
 
                 const result = await window.electron.saveFile({ 
-                    buffer: base64data,
+                    buffer: buffer, // Send Uint8Array directly
                     defaultName: `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`
                 });
                 
@@ -228,12 +246,6 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
             audioRef.current.play();
         }
         setIsPlaying(!isPlaying);
-    };
-
-    const formatTime = (seconds) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
     if (reviewMode && recordedBlob) {
@@ -305,7 +317,7 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
             
             {isRecording ? (
                 <div className="flex items-center gap-2 bg-red-900/30 border border-red-500/50 rounded-full pl-3 pr-1 py-1 animate-pulse z-50">
-                    <span className="text-xs text-red-200 font-mono w-10">{formatTime(recordingTime)}</span>
+                    <RecordingTimer isRecording={isRecording} />
                     <button 
                         onClick={stopRecording}
                         className="p-1 rounded-full bg-red-600 hover:bg-red-500 text-white transition-colors"

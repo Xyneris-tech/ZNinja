@@ -82,7 +82,7 @@ The ultimate stealth assistant. Designed to be invisible to monitoring software 
 
 ## 💻 Tech Stack (v3.0)
 
-- **Frontend**: Vite + React + Vanilla CSS (Aesthetic Focus)
+- **Frontend**: Vite + React + Vanilla CSS & Tailwind CSS (Aesthetic Focus)
 - **Backend**: Electron (Main/Preload architecture)
 - **AI Engine**: Google Gemini (1.5 Pro, 1.5 Flash, Thinking 2.0 Fallbacks)
 - **Low-Level Native**: Koffi (C++ Bindings for Windows Stealth APIs)

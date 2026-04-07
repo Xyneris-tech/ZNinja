@@ -52,7 +52,7 @@ async function listModels() {
 }
 
 // Ask Gemini
-async function askGemini({ prompt, modelName, images, image, audioData, history = [] }) {
+async function askGemini({ prompt, modelName, images, image, audioData, history = [], workingMode }) {
     let smartFallbacks = [];
     const isPro = await checkTierInternal();
 
@@ -91,11 +91,48 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
         "gemini-1.5-flash"
     ].filter((v, i, a) => v && a.indexOf(v) === i);
 
+    // --- SYSTEM INSTRUCTION LOGIC ---
+    const MODE_INSTRUCTIONS = {
+        'general': `You are ZNinja, a helpful, versatile, and highly efficient AI assistant.
+**Goal:** Deliver clear, concise, and accurate answers.
+**Output Format (STRICT):**
+- Direct answer/solution first.
+- Brief explanation or next steps only if necessary.
+- NO unnecessary conversational fluff (e.g., 'Sure, I can help with that').`,
+        'code': `You are a Senior Software Engineer.
+**Goal:** Provide production-ready, well-documented, and efficient code solutions.
+**Operational Protocol:**
+**Goal:** Production-ready, optimal code.
+**Preferences:** Default to Java or Python unless context dictates otherwise.
+**Output Structure (STRICT):**
+1. **Logic**: 1 sentence.
+2. **Code**: Full, clean, and ready-to-paste.
+3. **Complexity**: Time/Space O(n).`,
+
+        'competitive': `You are ZNinja, an elite LeetCode/CP Solver.
+**Goal:** Optimal algorithmic efficiency (O(N) focus).
+**Preferences:** Use Java or Python (untill their is context of other langugae) class-based structure for LeetCode-style problems.
+**Output Structure (STRICT):**
+1. **Logic**: 1 concise sentence.
+2. **Code**: Ready-to-paste solution ONLY.
+3. **Complexity**: Time/Space Big O.
+- NO theory, NO intro, NO outro, less comments.`,
+
+        'quiz': `Expert Tutor.
+**Goal:** Speed and Correctness.
+**Output Format (STRICT):**
+- Correct Option (e.g. 'Option A') followed by 1-sentence justification.
+- NO extra text.`
+    };
+
     const defaultSystemInstruction = getSystemInstruction();
-    // Override for Audio/Secretary Mode
-    const systemInstruction = audioData
-        ? "You are an expert executive secretary. Your goal is to create accurate, professional Minutes of Meeting from audio recordings. Output strictly the minutes, no code analysis or complexity metrics."
-        : defaultSystemInstruction;
+    
+    let systemInstruction = defaultSystemInstruction;
+    if (audioData) {
+        systemInstruction = "You are an expert executive secretary. Your goal is to create accurate, professional Minutes of Meeting from audio recordings. Output strictly the minutes, no code analysis or complexity metrics.";
+    } else if (workingMode && MODE_INSTRUCTIONS[workingMode]) {
+        systemInstruction = MODE_INSTRUCTIONS[workingMode];
+    }
 
     for (const modelId of modelFallbacks) {
         if (!modelId) continue;
@@ -153,20 +190,22 @@ Include:
                         { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
                     ]
                 });
-
             } else if (allImages.length > 0) {
                 // Single Turn with Image (+ Vision Chain-of-Thought)
-                const textPrompt = `[SYSTEM: VISION MODE ACTIVATED]
-1. TRANSCRIPT: First, strictly transcribe the full problem text from the images. Do not summarize.
-2. ANALYZE: Apply the "Elite Programmer" protocol to the transcribed text.
-3. SOLVE: Provide the solution code.
+                let visionInstructions = "Analyze the image and follow your system instructions.";
+                if (workingMode === 'competitive') {
+                    visionInstructions = "Strictly transcribe the problem from the image and solve it using the ZNinja Competitive Programming protocol.";
+                } else if (workingMode === 'quiz') {
+                    visionInstructions = "Directly solve the question in the image with maximum accuracy and no fluff.";
+                }
 
-${prompt || "Solve this problem."}`;
+                const visionPrompt = `[VISION SERVICE ACTIVE] ${visionInstructions}
+${prompt || ""}`;
 
-                const contentParts = [{ text: textPrompt }];
+                const visionParts = [{ text: visionPrompt }];
                 allImages.forEach(img => {
                     const base64Data = img.split(',')[1];
-                    contentParts.push({
+                    visionParts.push({
                         inlineData: {
                             data: base64Data,
                             mimeType: "image/png"
@@ -174,14 +213,14 @@ ${prompt || "Solve this problem."}`;
                     });
                 });
 
-                const genConfig = { maxOutputTokens: 65536 };
+                const visionConfig = { maxOutputTokens: 65536 };
                 if (modelId.includes('thinking') || modelId.includes('gemini-3')) {
-                    genConfig.thinkingConfig = { includeThoughts: true, thinkingLevel: "HIGH" };
+                    visionConfig.thinkingConfig = { includeThoughts: true, thinkingLevel: "HIGH" };
                 }
 
                 result = await model.generateContent({
-                    contents: [{ role: 'user', parts: contentParts }],
-                    generationConfig: genConfig,
+                    contents: [{ role: 'user', parts: visionParts }],
+                    generationConfig: visionConfig,
                     safetySettings: [
                         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
                         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },

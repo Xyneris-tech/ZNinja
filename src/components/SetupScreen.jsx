@@ -31,25 +31,6 @@ const SetupScreen = ({
                         className="w-full bg-neutral-900 border border-neutral-600 rounded px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 transition-colors duration-200 mb-4"
                     />
                     
-                    <div className="mb-4">
-                        <div className="flex justify-between items-center mb-1">
-                            <label className="block text-xs text-neutral-400 uppercase font-bold tracking-wider ml-1">AI Persona (System Instruction)</label>
-                            <button 
-                                type="button" 
-                                onClick={() => setSetupRole(DEFAULT_PERSONA)}
-                                className="text-[10px] text-emerald-500 hover:text-emerald-400 underline"
-                            >
-                                Use Default
-                            </button>
-                        </div>
-                        <textarea
-                            value={setupRole}
-                            onChange={(e) => setSetupRole(e.target.value)}
-                            placeholder="Define who the AI is..."
-                            className="w-full h-32 bg-neutral-900 border border-neutral-600 rounded px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 transition-colors duration-200 resize-none"
-                        />
-                    </div>
-
                     {setupError && <div className="text-red-400 text-xs mb-4 text-center">{setupError}</div>}
                     <button 
                         type="submit" 

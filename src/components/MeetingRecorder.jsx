@@ -278,7 +278,6 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
                  <button 
                     onClick={togglePlayback}
                     className="p-1 hover:text-emerald-400 text-neutral-300" 
-                    title={isPlaying ? "Pause Preview" : "Play Preview"}
                  >
                     {isPlaying ? <PauseIcon /> : <PlayIcon />}
                  </button>
@@ -286,7 +285,6 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
                  <button 
                     onClick={handleSave}
                     className="p-1 hover:text-blue-400 text-neutral-300" 
-                    title="Save to Disk"
                  >
                     <SaveIcon/>
                  </button>
@@ -326,21 +324,19 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
                     </button>
                 </div>
             ) : (
-                <div className="flex items-center bg-neutral-800/50 rounded-full border border-neutral-700/50 overflow-hidden transition-all duration-300"
+                <div className="flex items-center bg-neutral-800/50 rounded-full border border-neutral-700/50 overflow-hidden transition-all translate-y-[2px] translate-x-1 duration-300"
                      style={{ maxWidth: isExpanded ? '120px' : '27px' }}
                 >
                     <div className={`flex items-center gap-1 px-1 transition-opacity duration-200 ${isExpanded ? 'opacity-100' : 'opacity-0 w-[0px] '}`}>
                          <button
                             onClick={() => startRecording('audio')}
                             className="p-1.5 hover:text-emerald-400 text-neutral-400 transition-colors"
-                            title="Record Audio"
                         >
                             <MicIcon />
                         </button>
                         <button
                             onClick={() => startRecording('video')}
                             className="p-1.5 hover:text-emerald-400 text-neutral-400 transition-colors"
-                            title="Record Video"
                         >
                             <VideoIcon />
                         </button>

@@ -9,7 +9,9 @@ import CodeBlock from './CodeBlock';
 import AutoResizeTextarea from './AutoResizeTextarea';
 import ResizeHandle from './ResizeHandle';
 import MeetingRecorder from './MeetingRecorder';
-import { SendIcon, CameraIcon, XIcon } from './Icons';
+import { SendIcon, CameraIcon, XIcon, BrainIcon, CodeIcon, NinjaIcon, CheckIcon } from './Icons';
+import { WORKING_MODES } from '../modes';
+import { useState } from 'react';
 
 // Markdown components definition - Memoized outside component or useMemo
 const MARKDOWN_COMPONENTS = {
@@ -84,8 +86,22 @@ const ChatInterface = ({
     handleCapture,
     handleSendAudio,
     inputRef,
-    selectedModel
+    selectedModel,
+    workingMode,
+    setWorkingMode
 }) => {
+    const [showModeMenu, setShowModeMenu] = useState(false);
+
+    const currentMode = WORKING_MODES.find(m => m.id === workingMode) || WORKING_MODES[0];
+
+    const getModeIcon = (modeId) => {
+        switch (modeId) {
+            case 'code': return <CodeIcon />;
+            case 'competitive': return <NinjaIcon />;
+            case 'quiz': return <CheckIcon />;
+            default: return <BrainIcon />;
+        }
+    };
     
     return (
         <div className="flex-1 flex flex-col w-full relative overflow-hidden min-h-0">
@@ -118,6 +134,48 @@ const ChatInterface = ({
                         ))}
                     </div>
                 )}
+
+                {/* Mode Selector */}
+                <div className="absolute left-4 bottom-[2.3rem] z-30">
+                    <button
+                        type="button"
+                        onClick={() => setShowModeMenu(!showModeMenu)}
+                        className="flex items-center translate-x-1 gap-1.5 px-2 py-1 bg-neutral-700/50 hover:bg-neutral-700 text-[10px] text-neutral-300 rounded border border-neutral-600 transition-all duration-200"
+                    >
+                        {getModeIcon(workingMode)}
+                        <span className="font-bold uppercase tracking-widest hidden sm:inline">{currentMode.label}</span>
+                    </button>
+
+                    {showModeMenu && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setShowModeMenu(false)} />
+                            <div className="absolute bottom-full left-0 mb-2 py-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-2xl z-50 min-w-[160px]">
+                                <div className="px-3 py-2 text-[10px] text-neutral-500 font-bold uppercase tracking-wider border-b border-neutral-700/50 mb-1">
+                                    Working Mode
+                                </div>
+                                {WORKING_MODES.map(mode => (
+                                    <button
+                                        key={mode.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setWorkingMode(mode.id);
+                                            setShowModeMenu(false);
+                                        }}
+                                        className={`w-full text-left px-3 py-2 text-[11px] hover:bg-neutral-700 flex flex-col gap-0.5 transition-colors ${workingMode === mode.id ? 'text-emerald-400 bg-emerald-500/10' : 'text-neutral-400'}`}
+                                    >
+                                        <div className="flex items-center gap-2 font-bold uppercase tracking-wide">
+                                            {getModeIcon(mode.id)}
+                                            {mode.label}
+                                        </div>
+                                        <div className="text-[9px] text-neutral-500 leading-tight">
+                                            {mode.description}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </div>
 
                  {/* Audio Recorder */}
                 <div className="absolute right-20 bottom-[2.29rem] z-20">
@@ -169,7 +227,8 @@ const ChatInterface = ({
                                     prompt: userPrompt, 
                                     modelName: selectedModel, 
                                     images: [result.image],
-                                    history: history 
+                                    history: history,
+                                    workingMode: workingMode
                                 }).then(res => {
                                     setMessages(prev => {
                                         const filtered = prev.filter(m => !m.isTemp);

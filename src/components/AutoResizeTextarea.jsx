@@ -57,7 +57,7 @@ const AutoResizeTextarea = React.forwardRef(({ value, onChange, onEnterPress, pl
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             rows={1}
-            className="w-full bg-neutral-900 border border-neutral-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition-colors duration-200 resize-none overflow-hidden hover:overflow-y-auto"
+            className="w-full pl-10 bg-neutral-900 border border-neutral-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition-colors duration-200 resize-none overflow-hidden hover:overflow-y-auto"
             style={{ minHeight: '38px', maxHeight: isManuallyResized.current ? 'none' : '200px' }} 
         />
         {/* Custom Resize Handle */}

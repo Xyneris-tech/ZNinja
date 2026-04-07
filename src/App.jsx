@@ -4,6 +4,7 @@ import TitleBar from './components/TitleBar';
 import ChatHistorySidebar from './components/ChatHistorySidebar';
 import ChatInterface from './components/ChatInterface';
 import { DEFAULT_PERSONA } from './constants';
+import { WORKING_MODES } from './modes';
 
 
 function App() {
@@ -27,12 +28,11 @@ function App() {
   const [selectedModel, setSelectedModel] = useState('gemini-1.5-flash-latest');
   const [showModelMenu, setShowModelMenu] = useState(false);
   
-  // Setup State
   const [isSetup, setIsSetup] = useState(false);
   const [checkingKey, setCheckingKey] = useState(true);
   const [setupKey, setSetupKey] = useState('');
-  const [setupRole, setSetupRole] = useState(DEFAULT_PERSONA);
   const [setupError, setSetupError] = useState('');
+  const [workingMode, setWorkingMode] = useState('general');
 
   // ... (useEffect for models and history - unchanged) ...
 
@@ -79,8 +79,8 @@ function App() {
     
     
     if (window.electron && window.electron.saveApiKey) {
-        // Pass both key and role
-        const success = await window.electron.saveApiKey({ key: setupKey.trim(), role: setupRole.trim() });
+        // Pass only key (backend handles default/mode-based roles now)
+        const success = await window.electron.saveApiKey({ key: setupKey.trim() });
         if (success) {
             setIsSetup(true);
             fetchModels();
@@ -102,13 +102,6 @@ function App() {
                 setIsSetup(false);
             }
             setCheckingKey(false);
-            
-            // Also fetch the role
-            if (window.electron.getRole) {
-                window.electron.getRole().then(role => {
-                    if (role) setSetupRole(role);
-                });
-            }
         });
     } else {
         // Fallback for non-electron env (dev w/o electron)
@@ -342,7 +335,8 @@ function App() {
           prompt: userPrompt, 
           modelName: actualModel, 
           images: currentAttachments,
-          history: history // Send history
+          history: history, // Send history
+          workingMode: workingMode
       }).then(result => {
         setMessages(prev => {
           const filtered = prev.filter(m => !m.isTemp);
@@ -352,7 +346,7 @@ function App() {
         });
       });
     }
-  }, [inputValue, currentSessionId, attachments, messages, isSmartMode, selectedModel]);
+  }, [inputValue, currentSessionId, attachments, messages, isSmartMode, selectedModel, workingMode]);
 
   const handleSendAudio = useCallback((audioBase64) => {
       if (window.electron && window.electron.askGemini) {
@@ -379,7 +373,8 @@ function App() {
               prompt: '', // Backend provides default prompt for audio
               modelName: actualModel,
               audioData: audioBase64,
-              history: history
+              history: history,
+              workingMode: workingMode
           }).then(result => {
               setMessages(prev => {
                   const filtered = prev.filter(m => !m.isTemp);
@@ -389,7 +384,7 @@ function App() {
               });
           });
       }
-  }, [currentSessionId, messages, isSmartMode, selectedModel]);
+  }, [currentSessionId, messages, isSmartMode, selectedModel, workingMode]);
 
 
 
@@ -404,8 +399,6 @@ function App() {
         <SetupScreen 
             setupKey={setupKey} 
             setSetupKey={setSetupKey} 
-            setupRole={setupRole} 
-            setSetupRole={setSetupRole} 
             setupError={setupError} 
             onSave={handleSaveKey} 
         />
@@ -462,6 +455,8 @@ function App() {
               handleSendAudio={handleSendAudio}
               inputRef={inputRef}
               selectedModel={selectedModel}
+              workingMode={workingMode}
+              setWorkingMode={setWorkingMode}
           />
       </div>
     </div>

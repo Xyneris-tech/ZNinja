@@ -3,8 +3,8 @@ import SetupScreen from './components/SetupScreen';
 import TitleBar from './components/TitleBar';
 import ChatHistorySidebar from './components/ChatHistorySidebar';
 import ChatInterface from './components/ChatInterface';
-import { DEFAULT_PERSONA } from './constants';
-import { WORKING_MODES } from './modes';
+// import { DEFAULT_PERSONA } from './constants';
+// import { WORKING_MODES } from './modes';
 
 
 function App() {
@@ -33,6 +33,7 @@ function App() {
   const [setupKeys, setSetupKeys] = useState(['']);
   const [setupError, setSetupError] = useState('');
   const [workingMode, setWorkingMode] = useState('general');
+  const [isEncrypted, setIsEncrypted] = useState(true); // Default to encrypted
 
   // ... (useEffect for models and history - unchanged) ...
 
@@ -80,7 +81,10 @@ function App() {
     }
     
     if (window.electron && window.electron.saveApiKey) {
-        const success = await window.electron.saveApiKey({ keys: filteredKeys });
+        const success = await window.electron.saveApiKey({ 
+            keys: filteredKeys,
+            encrypted: isEncrypted
+        });
         if (success) {
             setIsSetup(true);
             fetchModels();
@@ -283,7 +287,7 @@ function App() {
             await window.electron.clearApiKey();
             setIsSetup(false);
             setAvailableModels([]);
-            setSetupKey('');
+            setSetupKeys(['']);
         }
     }
   };
@@ -399,6 +403,8 @@ function App() {
             setSetupKeys={setSetupKeys} 
             setupError={setupError} 
             onSave={handleSaveKey} 
+            isEncrypted={isEncrypted}
+            setIsEncrypted={setIsEncrypted}
         />
       );
   }

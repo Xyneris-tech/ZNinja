@@ -2,30 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body {
+html,
+body {
   height: 100%;
   margin: 0;
-  overflow: hidden; /* Prevent scrolling on the transparent body */
+  overflow: hidden;
+  /* Prevent scrolling on the transparent (body not on chat) */
 }
 
 /* Custom scrollbar for chat */
 ::-webkit-scrollbar {
   width: 5px;
 }
+
 ::-webkit-scrollbar {
   height: 5px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #4b5563;
   border-radius: 2px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
 }
 
-*{
+* {
   cursor: default !important;
+}
+
+
+
+
+
+
+
+
+.no-drag {
+  -webkit-app-region: no-drag;
 }

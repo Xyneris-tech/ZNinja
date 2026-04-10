@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+const { app, safeStorage } = require('electron');
 
 // --- Config Management ---
 const configPath = path.join(app.getPath('userData'), 'config.json');
@@ -11,8 +11,27 @@ function getApiKeys() {
     try {
         if (fs.existsSync(configPath)) {
             const data = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            if (data.apiKeys && Array.isArray(data.apiKeys)) return data.apiKeys;
-            if (data.apiKey) return [data.apiKey]; // Old format fallback
+            let keys = [];
+
+            if (data.apiKeys && Array.isArray(data.apiKeys)) {
+                keys = data.apiKeys;
+            } else if (data.apiKey) {
+                keys = [data.apiKey]; // Old format fallback
+            }
+
+            // Handle Decryption if flag is set
+            if (data.isEncrypted && keys.length > 0 && safeStorage.isEncryptionAvailable()) {
+                keys = keys.map(k => {
+                    try {
+                        // safeStorage.decryptString expects a Buffer
+                        return safeStorage.decryptString(Buffer.from(k, 'base64'));
+                    } catch (e) {
+                        console.error("Decryption failed for a key:", e);
+                        return k; // Return as is if decryption fails (might be plain text already)
+                    }
+                });
+            }
+            return keys;
         }
     } catch (e) {
         console.error("Error reading config:", e);
@@ -33,24 +52,37 @@ function saveApiKey(payload) {
             current = JSON.parse(fs.readFileSync(configPath, 'utf8'));
         }
         
+        let keysToSave = [];
+        let shouldEncrypt = false;
+
         // Support saving both key(s) and role
         if (typeof payload === 'object' && !Array.isArray(payload)) {
             if (payload.keys && Array.isArray(payload.keys)) {
-                current.apiKeys = payload.keys.filter(k => k && k.trim());
-                // For backward compatibility with older versions that look for 'apiKey'
-                if (current.apiKeys.length > 0) current.apiKey = current.apiKeys[0];
+                keysToSave = payload.keys.filter(k => k && k.trim());
             } else if (payload.key) {
-                current.apiKey = payload.key;
-                current.apiKeys = [payload.key];
+                keysToSave = [payload.key];
             }
             if (payload.role) current.systemInstruction = payload.role;
+            if (payload.encrypted !== undefined) shouldEncrypt = payload.encrypted;
         } else if (Array.isArray(payload)) {
-            current.apiKeys = payload.filter(k => k && k.trim());
-            if (current.apiKeys.length > 0) current.apiKey = current.apiKeys[0];
+            keysToSave = payload.filter(k => k && k.trim());
         } else {
-            current.apiKey = payload;
-            current.apiKeys = [payload];
+            keysToSave = [payload];
         }
+
+        current.isEncrypted = shouldEncrypt;
+
+        if (shouldEncrypt && safeStorage.isEncryptionAvailable()) {
+            current.apiKeys = keysToSave.map(k => {
+                const encryptedBuffer = safeStorage.encryptString(k);
+                return encryptedBuffer.toString('base64');
+            });
+        } else {
+            current.apiKeys = keysToSave;
+        }
+
+        // Backward compatibility
+        if (current.apiKeys.length > 0) current.apiKey = current.apiKeys[0];
 
         fs.writeFileSync(configPath, JSON.stringify(current, null, 2));
         return true;

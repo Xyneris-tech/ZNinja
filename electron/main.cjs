@@ -13,6 +13,10 @@ if (!process.env.VITE_GEMINI) {
     require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 }
 
+// Determine initial window height based on API key status
+const initialKeys = config.getApiKeys();
+const initialHeight = (initialKeys && initialKeys.length > 0) ? 400 : 500;
+
 function createWindow() {
     const helperWin = new BrowserWindow({
         width: 0,
@@ -26,7 +30,7 @@ function createWindow() {
 
     const win = new BrowserWindow({
         width: 600,
-        height: 400,
+        height: initialHeight,
         frame: false, // Frameless for custom UI
         transparent: true, // Transparent background
         title: 'Service Host Runtime',
@@ -66,10 +70,26 @@ function createWindow() {
     // --- IPC Handlers ---
 
     // Config & Sessions
-    ipcMain.handle('save-api-key', (_, data) => config.saveApiKey(data));
+    ipcMain.handle('save-api-key', (_, data) => {
+        const success = config.saveApiKey(data);
+        if (success) {
+            win.setResizable(true);
+            win.setSize(600, 400);
+            win.setResizable(false);
+        }
+        return success;
+    });
     ipcMain.handle('get-api-key', () => config.getApiKey());
     ipcMain.handle('get-api-keys', () => config.getApiKeys());
-    ipcMain.handle('clear-api-key', () => config.clearApiKey());
+    ipcMain.handle('clear-api-key', () => {
+        const success = config.clearApiKey();
+        if (success) {
+            win.setResizable(true);
+            win.setSize(600, 500);
+            win.setResizable(false);
+        }
+        return success;
+    });
     ipcMain.handle('get-role', () => config.getSystemInstruction());
 
     ipcMain.handle('get-sessions', async () => config.getSessions());

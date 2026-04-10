@@ -264,7 +264,7 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
                         <button 
                             onClick={handleDiscard}
                             className="p-1 hover:text-red-400 text-neutral-300"
-                            title="Discard"
+                           
                         >
                             <StopCircleIcon className="w-4 h-4" />
                         </button>

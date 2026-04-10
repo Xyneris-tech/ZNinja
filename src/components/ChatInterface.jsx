@@ -37,7 +37,7 @@ const MARKDOWN_COMPONENTS = {
 const MessageItem = memo(({ msg }) => {
     return (
         <div className={`text-sm flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`inline-block px-3 py-2 rounded-lg max-w-[90%] ${msg.role === 'user' ? 'bg-emerald-500/30' : 'bg-neutral-700/40'}`}>
+            <div className={`px-3 py-2 rounded-lg max-w-[90%] min-w-0 break-words overflow-hidden ${msg.role === 'user' ? 'bg-emerald-500/30' : 'bg-neutral-700/40'}`}>
                 {msg.images && msg.images.map((img, i) => (
                     <img key={i} src={img} alt={`Attachment ${i}`} className="max-w-xs max-h-48 rounded mb-2 border border-neutral-600/50 block" />
                 ))}
@@ -67,7 +67,7 @@ const MessageItem = memo(({ msg }) => {
 // Extracted MessageList
 const MessageList = memo(({ messages }) => {
     return (
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 pt-12">
             {messages.map((msg, idx) => (
                 <MessageItem key={idx} msg={msg} />
             ))}

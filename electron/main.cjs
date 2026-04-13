@@ -58,7 +58,7 @@ function createWindow() {
     });
 
     // Load Vite dev server or build
-    const isDev = process.env.NODE_ENV === 'development';
+    const isDev = !app.isPackaged || process.argv.includes('--dev');
     if (isDev) {
         win.loadURL('http://localhost:5173');
     } else {

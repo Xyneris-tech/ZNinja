@@ -21,15 +21,29 @@ function getApiKeys() {
 
             // Handle Decryption if flag is set
             if (data.isEncrypted && keys.length > 0 && safeStorage.isEncryptionAvailable()) {
+                let foundInconsistency = false;
                 keys = keys.map(k => {
                     try {
-                        // safeStorage.decryptString expects a Buffer
-                        return safeStorage.decryptString(Buffer.from(k, 'base64'));
+                        const decrypted = safeStorage.decryptString(Buffer.from(k, 'base64'));
+                        return decrypted;
                     } catch (e) {
-                        console.error("Decryption failed for a key:", e);
-                        return k; // Return as is if decryption fails (might be plain text already)
+                        // If decryption fails, it's likely a plain text key.
+                        // We mark this so we can auto-repair the config file flag later.
+                        foundInconsistency = true;
+                        return k; 
                     }
                 });
+
+                // Auto-Repair: If we had to fall back to plain text for any key,
+                // update the config flag so we don't keep trying to decrypt in the future.
+                if (foundInconsistency) {
+                    data.isEncrypted = false;
+                    try {
+                        fs.writeFileSync(configPath, JSON.stringify(data, null, 2));
+                    } catch (err) {
+                        // Ignore write errors during auto-repair
+                    }
+                }
             }
             return keys;
         }

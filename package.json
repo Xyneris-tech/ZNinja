@@ -9,7 +9,8 @@
     "zninja": "./bin/zninja.cjs"
   },
   "scripts": {
-    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron .\"",
+    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "dev:devMode": "concurrently \"vite\" \"wait-on tcp:5173 && electron . --dev\"",
     "build": "vite build && electron-builder",
     "preview": "vite preview",
     "setup": "node scripts/setup.js",

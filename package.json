@@ -5,10 +5,15 @@
   "version": "2.5.0",
   "type": "module",
   "main": "electron/main.cjs",
+  "bin": {
+    "zninja": "./bin/zninja.cjs"
+  },
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron .\"",
     "build": "vite build && electron-builder",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "setup": "node scripts/setup.js",
+    "install-system": "npm install -g ."
   },
   "description": "Service Host Runtime",
   "author": "System Provider",
@@ -20,12 +25,14 @@
     },
     "win": {
       "target": "nsis",
+      "executableName": "zninja",
       "icon": "resources/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Service Host Runtime"
+      "shortcutName": "Service Host Runtime",
+      "include": "build/installer.nsh"
     },
     "files": [
       "dist",

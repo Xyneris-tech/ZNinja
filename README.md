@@ -73,9 +73,9 @@ If you wish to contribute or build from source:
 ZNinja includes a specialized **devMode** for real-time engine auditing and live-tuning of the stealth engine.
 
 ### Developer CLI
-- `--setup`: Re-run the system configuration assistant.
-- `--version`: Display engine specifications.
-- `--help`: Display help menu.
+- `zninja --setup`: Re-run the system configuration assistant.
+- `zninja --version`: Display engine specifications.
+- `zninja --help`: Display help menu.
 
 ### Execution Scripts
 - `npm run dev`: Standard development launch.

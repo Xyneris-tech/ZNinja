@@ -78,6 +78,7 @@ typings/
 
 # Electron-Builder output
 dist/
+dist-app/
 dist-electron/
 release/
 

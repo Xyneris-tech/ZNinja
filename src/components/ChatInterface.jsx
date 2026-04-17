@@ -1,9 +1,10 @@
 import React, { useRef, memo, useMemo } from 'react'; // Added memo
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+
+const LazyMarkdown = React.lazy(() => import('react-markdown'));
+const remarkGfm = import('remark-gfm');
+const remarkMath = import('remark-math');
+const rehypeKatex = import('rehype-katex');
 
 import CodeBlock from './CodeBlock';
 import AutoResizeTextarea from './AutoResizeTextarea';
@@ -35,6 +36,18 @@ const MARKDOWN_COMPONENTS = {
 
 // Extracted MessageItem
 const MessageItem = memo(({ msg }) => {
+    // Resolve plugins as they are promises in this lazy setup
+    const [plugins, setPlugins] = React.useState({ remark: [], rehype: [] });
+
+    React.useEffect(() => {
+        Promise.all([remarkGfm, remarkMath, rehypeKatex]).then(([gfm, math, katex]) => {
+            setPlugins({
+                remark: [gfm.default, math.default],
+                rehype: [katex.default]
+            });
+        });
+    }, []);
+
     return (
         <div className={`text-sm flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`px-3 py-2 rounded-lg max-w-[90%] min-w-0 break-words overflow-hidden ${msg.role === 'user' ? 'bg-emerald-500/30' : 'bg-neutral-700/40'}`}>
@@ -45,13 +58,15 @@ const MessageItem = memo(({ msg }) => {
                     <img src={msg.image} alt="Attachment" className="max-w-xs max-h-48 rounded mb-2 border border-neutral-600/50 block" />
                 )}
                 {msg.role === 'ai' ? (
-                    <ReactMarkdown 
-                        remarkPlugins={[remarkGfm, remarkMath]}
-                        rehypePlugins={[rehypeKatex]}
-                        components={MARKDOWN_COMPONENTS}
-                    >
-                        {msg.text}
-                    </ReactMarkdown>
+                    <React.Suspense fallback={<div className="animate-pulse text-xs text-neutral-500 italic">Processing response...</div>}>
+                        <LazyMarkdown 
+                            remarkPlugins={plugins.remark}
+                            rehypePlugins={plugins.rehype}
+                            components={MARKDOWN_COMPONENTS}
+                        >
+                            {msg.text}
+                        </LazyMarkdown>
+                    </React.Suspense>
                 ) : (
                     <span>{msg.text}</span>
                 )}

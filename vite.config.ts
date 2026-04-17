@@ -7,7 +7,7 @@ export default defineConfig({
     plugins: [react()],
     base: './', // Important for Electron to load relative paths
     build: {
-        outDir: 'dist',
+        outDir: 'dist-app',
         emptyOutDir: true,
     },
     resolve: {

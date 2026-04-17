@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { CheckIcon, ClipboardIcon } from './Icons';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+const SyntaxHighlighter = React.lazy(() => 
+    import('react-syntax-highlighter').then(module => ({ default: module.Prism }))
+);
 
 const CodeBlock = ({ inline, className, children, ...props }) => {
     const match = /language-(\w+)/.exec(className || '');
@@ -13,7 +16,15 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
       setTimeout(() => setIsCopied(false), 2000);
     };
   
-    return !inline ? (
+    if (inline) {
+        return (
+            <code className={`${className} bg-black/60 rounded px-1 py-0.5 font-mono text-xs`} {...props}>
+                {children}
+            </code>
+        );
+    }
+
+    return (
       <div className="relative group w-full">
         <button 
           onClick={handleCopy}
@@ -21,6 +32,19 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
         >
           {isCopied ? <CheckIcon /> : <ClipboardIcon />}
         </button>
+        <React.Suspense fallback={<pre className="bg-black/50 p-4 rounded-lg animate-pulse text-xs text-neutral-500">Loading highlighter...</pre>}>
+            <HighlighterContent match={match} props={props}>{children}</HighlighterContent>
+        </React.Suspense>
+      </div>
+    );
+};
+
+const HighlighterContent = ({ match, children, props }) => {
+    // We need to import the style dynamically too or just use a static one if we can't easily lazy load the style object
+    // For now, let's keep it simple and just lazy load the component itself.
+    // To also lazy load the style, we'd need to pass it in.
+    
+    return (
         <SyntaxHighlighter
           style={vscDarkPlus}
           language={match ? match[1] : 'text'}
@@ -51,12 +75,7 @@ const CodeBlock = ({ inline, className, children, ...props }) => {
         >
           {String(children).replace(/\n$/, '')}
         </SyntaxHighlighter>
-      </div>
-    ) : (
-      <code className={`${className} bg-black/60 rounded px-1 py-0.5 font-mono text-xs`} {...props}>
-        {children}
-      </code>
     );
-};
+}
 
 export default CodeBlock;

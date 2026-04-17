@@ -35,23 +35,17 @@
       "shortcutName": "Service Host Runtime",
       "include": "build/installer.nsh"
     },
+    "compression": "maximum",
     "files": [
-      "dist",
-      "electron"
+      "dist-app",
+      "electron",
+      "resources"
     ]
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "dotenv": "^17.2.3",
-    "katex": "^0.16.27",
-    "koffi": "^2.9.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-markdown": "^10.1.0",
-    "react-syntax-highlighter": "^16.1.0",
-    "rehype-katex": "^7.0.1",
-    "remark-gfm": "^4.0.1",
-    "remark-math": "^6.0.0"
+    "koffi": "^2.9.2"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
@@ -62,7 +56,15 @@
     "cross-env": "^7.0.3",
     "electron": "^30.0.6",
     "electron-builder": "^24.13.3",
+    "katex": "^0.16.27",
     "postcss": "^8.4.38",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "tailwindcss": "^3.4.3",
     "vite": "^5.2.0",
     "wait-on": "^7.2.0"

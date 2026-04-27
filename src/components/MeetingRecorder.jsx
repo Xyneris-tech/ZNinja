@@ -219,7 +219,7 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
                 });
                 
                 if (result.success) {
-                    setError("Saved successfully! ✅");
+                    setError("Saved successfully!");
                     setTimeout(() => setError(null), 3000);
                 } else if (result.error !== 'Cancelled') {
                     setError('Save failed: ' + result.error);
@@ -253,7 +253,7 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
              const url = URL.createObjectURL(recordedBlob);
              return (
                 <div className="flex flex-col gap-2 bg-neutral-800 p-2 absolute bottom-9 -right-16 rounded-lg border border-neutral-600 shadow-xl z-50">
-                    <video src={url} controls className="w-64 rounded bg-black" />
+                    <video src={url} controls className="w-72 rounded bg-black" />
                     <div className="flex items-center justify-between">
                         <button 
                             onClick={handleSave}
@@ -292,7 +292,7 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
                     onClick={handleTranscribe}
                     className="px-2 py-0.5 whitespace-nowrap bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded animate-pulse" 
                  >
-                    ✨ Analyze
+                    Analyze
                  </button>
                  <div className="h-4 w-[1px] bg-neutral-600 mx-1"></div>
                  <button 
@@ -314,7 +314,7 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
             )}
             
             {isRecording ? (
-                <div className="flex items-center gap-2 bg-red-900/30 border border-red-500/50 rounded-full pl-3 pr-1 py-1 animate-pulse z-50">
+                <div className="flex items-center translate-y-1 gap-2 bg-red-900/30 border border-red-500/50 rounded-full pl-3 pr-1 py-1 animate-pulse z-50">
                     <RecordingTimer isRecording={isRecording} />
                     <button 
                         onClick={stopRecording}

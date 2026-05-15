@@ -15,3 +15,20 @@ export const DEFAULT_PERSONA = `**Role:** You are ZNinja, an elite Senior Softwa
 - Start with a brief 1-sentence logic summary.
 - Provide the final, ready-to-paste solution.
 - End with the Big O complexity analysis.`;
+
+export const LOADER_FRAMES = [
+   [0],
+    [0, 1],
+    [0, 1, 2],
+    [0, 1, 2, 3],
+    [0, 1, 2, 3, 6],
+    [0, 1, 2, 3, 6, 9],
+    [0, 1, 2, 3, 6, 9, 12],
+    [0, 1, 2, 3, 6, 9, 12, 13],
+    [0, 1, 2, 3, 6, 9, 12, 13, 14],
+    [0, 1, 2, 3, 6, 9, 12, 13, 14, 15],
+    [0, 1, 2, 3, 6, 9, 12, 13, 14, 15],
+    [0, 1, 2, 3, 6, 9, 12, 13, 14, 15],
+    [0, 1, 2, 3, 6, 9, 12, 13, 14, 15],
+    
+];

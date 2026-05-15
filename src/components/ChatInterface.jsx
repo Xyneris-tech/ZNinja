@@ -12,6 +12,8 @@ import ResizeHandle from './ResizeHandle';
 import MeetingRecorder from './MeetingRecorder';
 import { SendIcon, CameraIcon, XIcon, BrainIcon, CodeIcon, NinjaIcon, CheckIcon } from './Icons';
 import { WORKING_MODES } from '../modes';
+import { LOADER_FRAMES } from '../constants';
+import { DotLoader } from './ui/dot-loader';
 import { useState } from 'react';
 
 // Markdown components definition - Memoized outside component or useMemo
@@ -50,7 +52,11 @@ const MessageItem = memo(({ msg }) => {
 
     return (
         <div className={`text-sm flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`px-3 py-2 rounded-lg max-w-[90%] min-w-0 break-words overflow-hidden ${msg.role === 'user' ? 'bg-emerald-500/30' : 'bg-neutral-700/40'}`}>
+            <div className={`px-3 py-2 rounded-lg max-w-[90%] min-w-0 break-words overflow-hidden ${
+                msg.role === 'user' 
+                ? 'bg-emerald-500/30' 
+                : (msg.isStreaming && !msg.text) ? 'bg-transparent' : 'bg-neutral-700/40'
+            }`}>
                 {msg.images && msg.images.map((img, i) => (
                     <img key={i} src={img} alt={`Attachment ${i}`} className="max-w-xs max-h-48 rounded mb-2 border border-neutral-600/50 block" />
                 ))}
@@ -60,7 +66,15 @@ const MessageItem = memo(({ msg }) => {
                 {msg.role === 'ai' ? (
                     <React.Suspense fallback={<div className="animate-pulse text-xs text-neutral-500 italic">Processing response...</div>}>
                         {msg.isStreaming && !msg.text ? (
-                            <div className="animate-pulse text-xs text-neutral-400 italic">Thinking...</div>
+                            <div className="flex items-center gap-2 py-1">
+                                <DotLoader 
+                                    frames={LOADER_FRAMES} 
+                                    className="gap-0.5" 
+                                    duration={200}
+                                    dotClassName="bg-white/40 [&.active]:bg-white "
+                                />
+                                <span className="text-sm text-white  animate-pulse">Thinking...</span>
+                            </div>
                         ) : (
                             <div className="relative">
                                 <LazyMarkdown 

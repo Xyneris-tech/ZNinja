@@ -59,13 +59,22 @@ const MessageItem = memo(({ msg }) => {
                 )}
                 {msg.role === 'ai' ? (
                     <React.Suspense fallback={<div className="animate-pulse text-xs text-neutral-500 italic">Processing response...</div>}>
-                        <LazyMarkdown 
-                            remarkPlugins={plugins.remark}
-                            rehypePlugins={plugins.rehype}
-                            components={MARKDOWN_COMPONENTS}
-                        >
-                            {msg.text}
-                        </LazyMarkdown>
+                        {msg.isStreaming && !msg.text ? (
+                            <div className="animate-pulse text-xs text-neutral-400 italic">Thinking...</div>
+                        ) : (
+                            <div className="relative">
+                                <LazyMarkdown 
+                                    remarkPlugins={plugins.remark}
+                                    rehypePlugins={plugins.rehype}
+                                    components={MARKDOWN_COMPONENTS}
+                                >
+                                    {msg.text}
+                                </LazyMarkdown>
+                                {msg.isStreaming && (
+                                    <span className="inline-block w-2 h-4 ml-1 bg-emerald-500 animate-pulse align-middle"></span>
+                                )}
+                            </div>
+                        )}
                     </React.Suspense>
                 ) : (
                     <span>{msg.text}</span>
@@ -229,33 +238,26 @@ const ChatInterface = ({
                         const result = await window.electron.captureScreen();
                         if (result.success) {
                             // Directly trigger Gemini with the captured image and current input
-                            if (window.electron && window.electron.askGemini) {
+                            if (window.electron && window.electron.streamGemini) {
                                 const userPrompt = inputValue || "give answer";
                                 setMessages(prev => [...prev, { role: 'user', text: userPrompt, images: [result.image] }]);
                                 setInputValue('');
-                                setMessages(prev => [...prev, { role: 'ai', text: 'Thinking...', isTemp: true }]);
+                                setMessages(prev => [...prev, { role: 'ai', text: '', isStreaming: true }]);
                                 
                                 // Context-aware Instant AI
                                 const history = messages
-                                    .filter(m => !m.isTemp && m.role !== 'system')
+                                    .filter(m => !m.isTemp && !m.isStreaming && m.role !== 'system')
                                     .map(m => ({
                                         role: m.role === 'ai' ? 'model' : 'user',
                                         parts: [{ text: m.text }]
                                     }));
 
-                                window.electron.askGemini({ 
+                                window.electron.streamGemini({ 
                                     prompt: userPrompt, 
                                     modelName: selectedModel, 
                                     images: [result.image],
                                     history: history,
                                     workingMode: workingMode
-                                }).then(res => {
-                                    setMessages(prev => {
-                                        const filtered = prev.filter(m => !m.isTemp);
-                                        return res.success 
-                                            ? [...filtered, { role: 'ai', text: res.text }]
-                                            : [...filtered, { role: 'ai', text: `Error: ${res.error}` }];
-                                    });
                                 });
                             }
                         }

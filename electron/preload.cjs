@@ -4,6 +4,22 @@ contextBridge.exposeInMainWorld('electron', {
     toggleStealth: (shouldEnable) => ipcRenderer.invoke('toggle-stealth', shouldEnable),
     listModels: () => ipcRenderer.invoke('list-models'),
     askGemini: (data) => ipcRenderer.invoke('ask-gemini', data),
+    streamGemini: (data) => ipcRenderer.send('stream-gemini', data),
+    onGeminiChunk: (callback) => {
+        const subscription = (event, data) => callback(data);
+        ipcRenderer.on('gemini-chunk', subscription);
+        return () => ipcRenderer.removeListener('gemini-chunk', subscription);
+    },
+    onGeminiDone: (callback) => {
+        const subscription = (event, data) => callback(data);
+        ipcRenderer.on('gemini-done', subscription);
+        return () => ipcRenderer.removeListener('gemini-done', subscription);
+    },
+    onGeminiError: (callback) => {
+        const subscription = (event, data) => callback(data);
+        ipcRenderer.on('gemini-error', subscription);
+        return () => ipcRenderer.removeListener('gemini-error', subscription);
+    },
     getSessions: () => ipcRenderer.invoke('get-sessions'),
     saveSession: (session) => ipcRenderer.invoke('save-session', session),
     deleteSession: (sessionId) => ipcRenderer.invoke('delete-session', sessionId),

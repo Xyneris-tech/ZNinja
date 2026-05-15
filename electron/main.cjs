@@ -100,6 +100,13 @@ function createWindow() {
     // Gemini
     ipcMain.handle('list-models', async () => gemini.listModels());
     ipcMain.handle('ask-gemini', async (_, payload) => gemini.askGemini(payload));
+    ipcMain.on('stream-gemini', async (event, payload) => {
+        gemini.streamGemini(payload, {
+            onChunk: (chunk) => win.webContents.send('gemini-chunk', { chunk }),
+            onDone: (usedModel) => win.webContents.send('gemini-done', { usedModel }),
+            onError: (error) => win.webContents.send('gemini-error', { error })
+        });
+    });
 
     // Native / Window
     ipcMain.handle('capture-screen', async () => {

@@ -146,6 +146,45 @@ function App() {
             }));
         }
 
+        if (window.electron.onGeminiChunk) {
+            unsubs.push(window.electron.onGeminiChunk(({ chunk }) => {
+                setMessages(prev => {
+                    const lastMsg = prev[prev.length - 1];
+                    if (lastMsg && lastMsg.isStreaming) {
+                        const updatedMsg = { ...lastMsg, text: lastMsg.text + chunk };
+                        return [...prev.slice(0, -1), updatedMsg];
+                    }
+                    return prev;
+                });
+            }));
+        }
+
+        if (window.electron.onGeminiDone) {
+            unsubs.push(window.electron.onGeminiDone(({ usedModel }) => {
+                setMessages(prev => {
+                    const lastMsg = prev[prev.length - 1];
+                    if (lastMsg && lastMsg.isStreaming) {
+                        const updatedMsg = { ...lastMsg, isStreaming: false, usedModel };
+                        return [...prev.slice(0, -1), updatedMsg];
+                    }
+                    return prev;
+                });
+            }));
+        }
+
+        if (window.electron.onGeminiError) {
+            unsubs.push(window.electron.onGeminiError(({ error }) => {
+                setMessages(prev => {
+                    const lastMsg = prev[prev.length - 1];
+                    if (lastMsg && lastMsg.isStreaming) {
+                        const updatedMsg = { ...lastMsg, isStreaming: false, text: lastMsg.text + `\n\nError: ${error}` };
+                        return [...prev.slice(0, -1), updatedMsg];
+                    }
+                    return prev;
+                });
+            }));
+        }
+
         if (window.electron.onGhostKey) {
             unsubs.push(window.electron.onGhostKey((data) => {
                 const textarea = inputRef.current;
@@ -244,9 +283,9 @@ function App() {
     }
 
     if (currentSessionId && window.electron?.saveSession && messages.length > 0) {
-        // Skip saving if the last message is temporary
+        // Skip saving if the last message is temporary or streaming
         const lastMsg = messages[messages.length - 1];
-        if (lastMsg && lastMsg.isTemp) return;
+        if (lastMsg && (lastMsg.isTemp || lastMsg.isStreaming)) return;
 
         const firstUserMsg = messages.find(m => m.role === 'user');
         const title = firstUserMsg ? firstUserMsg.text.slice(0, 30) : 'New Chat';
@@ -352,36 +391,25 @@ function App() {
     setInputValue('');
     setAttachments([]);
     
-    if (window.electron && window.electron.askGemini) {
-      setMessages(prev => [...prev, { role: 'ai', text: 'Thinking...', isTemp: true }]);
+    if (window.electron && window.electron.streamGemini) {
+      setMessages(prev => [...prev, { role: 'ai', text: '', isStreaming: true }]);
       
-      // Prepare history for context (exclude temp & system messages, map to Gemini format)
-      // Gemini format: { role: 'user' | 'model', parts: [{ text: string }] }
       const history = messages
-        .filter(m => !m.isTemp && m.role !== 'system')
+        .filter(m => !m.isTemp && !m.isStreaming && m.role !== 'system')
         .map(m => ({
             role: m.role === 'ai' ? 'model' : 'user',
             parts: [{ text: m.text }]
         }));
 
-      // If Smart Mode is on, we override the selected model with the 'smart' flag
-      // effectively passing 'zninja-auto-smart' as the modelName (or specific implementation choice)
       const actualModel = isSmartMode ? 'zninja-auto-smart' : selectedModel;
 
       setTimeout(() => {
-        window.electron.askGemini({ 
+        window.electron.streamGemini({ 
             prompt: userPrompt, 
             modelName: actualModel, 
             images: currentAttachments,
-            history: history, // Send history
+            history: history, 
             workingMode: workingMode
-        }).then(result => {
-          setMessages(prev => {
-            const filtered = prev.filter(m => !m.isTemp);
-            return result.success 
-              ? [...filtered, { role: 'ai', text: result.text }]
-              : [...filtered, { role: 'ai', text: `Error: ${result.error}` }];
-          });
         });
       }, 0);
     }
@@ -400,7 +428,7 @@ function App() {
           setMessages(prev => [...prev, { role: 'ai', text: '🎧 Listening and Transcribing...', isTemp: true }]);
 
           const history = messages
-            .filter(m => !m.isTemp && m.role !== 'system')
+            .filter(m => !m.isTemp && !m.isStreaming && m.role !== 'system')
             .map(m => ({
                 role: m.role === 'ai' ? 'model' : 'user',
                 parts: [{ text: m.text }]

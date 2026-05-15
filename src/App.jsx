@@ -20,6 +20,7 @@ function App() {
   const [isGhostTyping, setIsGhostTyping] = useState(false);
   const [isClipboardSync, setIsClipboardSync] = useState(false);
   const [isSmartMode, setIsSmartMode] = useState(true); // Default to Smart Mode ON
+  const [isCapturing, setIsCapturing] = useState(false);
   
   const inputRef = useRef(null); // Ref for textarea control
 
@@ -294,12 +295,17 @@ function App() {
 
   const handleCapture = useCallback(async () => {
       if (window.electron && window.electron.captureScreen) {
-          const result = await window.electron.captureScreen();
-          if (result.success) {
-              setAttachments(prev => [...prev, result.image]);
-          } else {
-              console.error(result.error);
-              setMessages(prev => [...prev, { role: 'ai', text: `Screen Capture Failed: ${result.error}` }]);
+          setIsCapturing(true);
+          try {
+              const result = await window.electron.captureScreen();
+              if (result.success) {
+                  setAttachments(prev => [...prev, result.image]);
+              } else {
+                  console.error(result.error);
+                  setMessages(prev => [...prev, { role: 'ai', text: `Screen Capture Failed: ${result.error}` }]);
+              }
+          } finally {
+              setIsCapturing(false);
           }
       }
   }, []);
@@ -461,6 +467,7 @@ function App() {
               selectedModel={selectedModel}
               workingMode={workingMode}
               setWorkingMode={setWorkingMode}
+              isCapturing={isCapturing}
           />
       </div>
     </div>

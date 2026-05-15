@@ -103,7 +103,8 @@ const ChatInterface = ({
     inputRef,
     selectedModel,
     workingMode,
-    setWorkingMode
+    setWorkingMode,
+    isCapturing
 }) => {
     const [showModeMenu, setShowModeMenu] = useState(false);
 
@@ -208,11 +209,15 @@ const ChatInterface = ({
                
                 <button
                     type="button"
-                    className="absolute right-5 bottom-[2.3rem] p-1 hover:bg-neutral-400/30 rounded-md text-neutral-400 hover:text-white transition-colors duration-200 z-10"
+                    disabled={isCapturing}
+                    className={`absolute right-5 bottom-[2.3rem] p-1 rounded-md transition-colors duration-200 z-10 ${isCapturing ? 'text-emerald-500 animate-pulse' : 'text-neutral-400 hover:text-white hover:bg-neutral-400/30'}`}
                     onClick={handleCapture}
-                    
                 >
-                    <CameraIcon />
+                    {isCapturing ? (
+                        <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                        <CameraIcon />
+                    )}
                 </button>
                 <span className='text-xs w-full flex justify-center items-center '>powered by CInfinite, developed by <a href="https://github.com/gajju44" target="_blank" rel="noopener noreferrer">&nbsp;gajju44</a></span>
                 <button

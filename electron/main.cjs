@@ -104,9 +104,10 @@ function createWindow() {
     // Native / Window
     ipcMain.handle('capture-screen', async () => {
         try {
+            // Smaller size for faster processing, still high enough for OCR/Vision
             const sources = await desktopCapturer.getSources({
                 types: ['screen'],
-                thumbnailSize: { width: 1920, height: 1080 }
+                thumbnailSize: { width: 1280, height: 720 }
             });
             const primarySource = sources[0];
             if (primarySource) {
@@ -140,7 +141,10 @@ function createWindow() {
 
     ipcMain.handle('get-audio-sources', async () => {
         try {
-            const sources = await desktopCapturer.getSources({ types: ['screen'] });
+            const sources = await desktopCapturer.getSources({ 
+                types: ['screen'],
+                thumbnailSize: { width: 150, height: 150 } // Tiny thumbnails for selection UI
+            });
             return {
                 success: true,
                 sources: sources.map(s => ({

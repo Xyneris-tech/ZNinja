@@ -187,7 +187,9 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
                     const visionPrompt = `[VISION ACTIVE] ${visionInstructions}\n${prompt || ""}`;
                     const visionParts = [{ text: visionPrompt }];
                     allImages.forEach(img => {
-                        visionParts.push({ inlineData: { data: img.split(',')[1], mimeType: "image/png" } });
+                        const mimeTypeMatch = img.match(/^data:(image\/[a-zA-Z]*);base64,/);
+                        const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : "image/png";
+                        visionParts.push({ inlineData: { data: img.split(',')[1], mimeType: mimeType } });
                     });
 
                     const visionConfig = { maxOutputTokens: 65536 };

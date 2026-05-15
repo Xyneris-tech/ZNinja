@@ -23,6 +23,7 @@ function App() {
   const [isCapturing, setIsCapturing] = useState(false);
   
   const inputRef = useRef(null); // Ref for textarea control
+  const saveTimeoutRef = useRef(null); // Ref for session save debounce
 
   // Dynamic model state
   const [availableModels, setAvailableModels] = useState([]);
@@ -243,6 +244,10 @@ function App() {
     }
 
     if (currentSessionId && window.electron?.saveSession && messages.length > 0) {
+        // Skip saving if the last message is temporary
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.isTemp) return;
+
         const firstUserMsg = messages.find(m => m.role === 'user');
         const title = firstUserMsg ? firstUserMsg.text.slice(0, 30) : 'New Chat';
 
@@ -253,9 +258,12 @@ function App() {
             messages: messages
         };
         
-        window.electron.saveSession(sessionData).then(() => {
-             loadSessions(); 
-        });
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+            window.electron.saveSession(sessionData).then(() => {
+                 loadSessions(); 
+            });
+        }, 600);
     }
   }, [messages, currentSessionId]);
 
@@ -299,7 +307,28 @@ function App() {
           try {
               const result = await window.electron.captureScreen();
               if (result.success) {
-                  setAttachments(prev => [...prev, result.image]);
+                  const compressDataURL = (dataUrl, maxWidth = 900, quality = 0.90) => {
+                    return new Promise((resolve) => {
+                      const img = new Image();
+                      img.onload = () => {
+                        let width = img.width;
+                        let height = img.height;
+                        if (width > maxWidth) {
+                          height = Math.round((height * maxWidth) / width);
+                          width = maxWidth;
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', quality));
+                      };
+                      img.src = dataUrl;
+                    });
+                  };
+                  const compressed = await compressDataURL(result.image);
+                  setAttachments(prev => [...prev, compressed]);
               } else {
                   console.error(result.error);
                   setMessages(prev => [...prev, { role: 'ai', text: `Screen Capture Failed: ${result.error}` }]);
@@ -339,20 +368,22 @@ function App() {
       // effectively passing 'zninja-auto-smart' as the modelName (or specific implementation choice)
       const actualModel = isSmartMode ? 'zninja-auto-smart' : selectedModel;
 
-      window.electron.askGemini({ 
-          prompt: userPrompt, 
-          modelName: actualModel, 
-          images: currentAttachments,
-          history: history, // Send history
-          workingMode: workingMode
-      }).then(result => {
-        setMessages(prev => {
-          const filtered = prev.filter(m => !m.isTemp);
-          return result.success 
-            ? [...filtered, { role: 'ai', text: result.text }]
-            : [...filtered, { role: 'ai', text: `Error: ${result.error}` }];
+      setTimeout(() => {
+        window.electron.askGemini({ 
+            prompt: userPrompt, 
+            modelName: actualModel, 
+            images: currentAttachments,
+            history: history, // Send history
+            workingMode: workingMode
+        }).then(result => {
+          setMessages(prev => {
+            const filtered = prev.filter(m => !m.isTemp);
+            return result.success 
+              ? [...filtered, { role: 'ai', text: result.text }]
+              : [...filtered, { role: 'ai', text: `Error: ${result.error}` }];
+          });
         });
-      });
+      }, 0);
     }
   }, [inputValue, currentSessionId, attachments, messages, isSmartMode, selectedModel, workingMode]);
 
@@ -377,20 +408,22 @@ function App() {
             
           const actualModel = isSmartMode ? 'zninja-auto-smart' : selectedModel;
 
-          window.electron.askGemini({
-              prompt: '', // Backend provides default prompt for audio
-              modelName: actualModel,
-              audioData: audioBase64,
-              history: history,
-              workingMode: workingMode
-          }).then(result => {
-              setMessages(prev => {
-                  const filtered = prev.filter(m => !m.isTemp);
-                  return result.success 
-                    ? [...filtered, { role: 'ai', text: result.text }]
-                    : [...filtered, { role: 'ai', text: `Error: ${result.error}` }];
-              });
-          });
+          setTimeout(() => {
+            window.electron.askGemini({
+                prompt: '', // Backend provides default prompt for audio
+                modelName: actualModel,
+                audioData: audioBase64,
+                history: history,
+                workingMode: workingMode
+            }).then(result => {
+                setMessages(prev => {
+                    const filtered = prev.filter(m => !m.isTemp);
+                    return result.success 
+                      ? [...filtered, { role: 'ai', text: result.text }]
+                      : [...filtered, { role: 'ai', text: `Error: ${result.error}` }];
+                });
+            });
+          }, 0);
       }
   }, [currentSessionId, messages, isSmartMode, selectedModel, workingMode]);
 

@@ -55,7 +55,7 @@ const MessageItem = memo(({ msg }) => {
             <div className={`px-3 py-2 rounded-lg max-w-[90%] min-w-0 break-words overflow-hidden ${
                 msg.role === 'user' 
                 ? 'bg-emerald-500/30' 
-                : (msg.isStreaming && !msg.text) ? 'bg-transparent' : 'bg-neutral-700/40'
+                : (msg.isStreaming && !msg.text) ? 'bg-transparent' : 'bg-black/50'
             }`}>
                 {msg.images && msg.images.map((img, i) => (
                     <img key={i} src={img} alt={`Attachment ${i}`} className="max-w-xs max-h-48 rounded mb-2 border border-neutral-600/50 block" />

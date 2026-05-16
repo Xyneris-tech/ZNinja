@@ -58,4 +58,6 @@ contextBridge.exposeInMainWorld('electron', {
     },
     resizeWindow: (width, height) => ipcRenderer.send('resize-window', { width, height }),
     getWindowSize: () => ipcRenderer.invoke('get-window-size'),
+    showConfirm: (message) => ipcRenderer.invoke('show-confirm', message),
+    focusWindow: () => ipcRenderer.invoke('focus-window'),
 });

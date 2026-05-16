@@ -192,6 +192,22 @@ function createWindow() {
         return true;
     });
 
+    ipcMain.handle('show-confirm', async (event, message) => {
+        const result = await dialog.showMessageBox(win, {
+            type: 'question',
+            buttons: ['Cancel', 'OK'],
+            defaultId: 1,
+            title: 'Confirm',
+            message: message
+        });
+        return result.response === 1;
+    });
+
+    ipcMain.handle('focus-window', () => {
+        if (win.isFocusable()) win.focus();
+        return true;
+    });
+
     // Ghost Typing
     let ghostTypingInterval = null;
     ipcMain.handle('set-ghost-typing', (event, active) => {

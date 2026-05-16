@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { MinusIcon, XIcon, PlusIcon, TrashIcon } from './Icons';
 import ResizeHandle from './ResizeHandle';
 
@@ -24,6 +24,23 @@ const SetupScreen = ({
         newKeys[index] = value;
         setSetupKeys(newKeys);
     };
+
+    const firstInputRef = useRef(null);
+
+    useEffect(() => {
+        // Adding a slight delay helps ensure focus is captured after native confirm dialogs or window resizing
+        const timeoutId = setTimeout(() => {
+            if (window.electron?.focusWindow) {
+                window.electron.focusWindow();
+            } else {
+                window.focus();
+            }
+            if (firstInputRef.current) {
+                firstInputRef.current.focus();
+            }
+        }, 100);
+        return () => clearTimeout(timeoutId);
+    }, []);
 
     return (
         <div className="flex h-screen select-none items-center justify-center bg-neutral-900 text-white relative">
@@ -71,11 +88,13 @@ const SetupScreen = ({
                             <div key={index} className="flex gap-2 group">
                                 <div className="flex-1 relative">
                                     <input 
+                                        ref={index === 0 ? firstInputRef : null}
                                         type="password" 
                                         value={key} 
                                         onChange={(e) => handleKeyChange(index, e.target.value)} 
                                         placeholder={`API Key #${index + 1}`}
                                         className="w-full bg-neutral-900 border border-neutral-600 rounded px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 transition-colors duration-200"
+                                        autoFocus={index === 0}
                                     />
                                 </div>
                                 <button

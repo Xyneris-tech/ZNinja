@@ -330,12 +330,24 @@ function App() {
   };
 
   const handleClearKey = async () => {
-    if (confirm('Are you sure you want to reset the API Key?')) {
+    let shouldClear = false;
+    if (window.electron && window.electron.showConfirm) {
+        shouldClear = await window.electron.showConfirm('Are you sure you want to reset the API Key?');
+    } else {
+        shouldClear = confirm('Are you sure you want to reset the API Key?');
+    }
+
+    if (shouldClear) {
         if (window.electron && window.electron.clearApiKey) {
             await window.electron.clearApiKey();
             setIsSetup(false);
             setAvailableModels([]);
             setSetupKeys(['']);
+            if (window.electron.focusWindow) {
+                await window.electron.focusWindow();
+            } else {
+                window.focus();
+            }
         }
     }
   };

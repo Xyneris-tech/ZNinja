@@ -1,0 +1,36 @@
+name: Build and Release ZNinja
+
+on:
+  push:
+    # Only run this workflow when you push a tag that looks like a version number (e.g., v2.7.0)
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    # This tells GitHub to give us a Mac server, pinned to v14 for stability
+    runs-on: macos-14
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS App
+        # This will run your vite build && electron-builder command for mac
+        run: npm run build -- --mac
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZNinja-macOS
+          # Grabs the compiled .dmg file from the dist directory or any subfolders (like dist/mac/)
+          path: dist/**/*.dmg

@@ -69,7 +69,7 @@ If you wish to contribute or build from source:
    cd Zninja
    npm install
    ```
-## 💻 The devMode System
+##  The devMode System
 ZNinja includes a specialized **devMode** for real-time engine auditing and live-tuning of the stealth engine.
 
 ### Developer CLI
@@ -83,7 +83,7 @@ ZNinja includes a specialized **devMode** for real-time engine auditing and live
 
 ---
 
-## 🛠️ Internal devMode Logic
+##  Internal devMode Logic
 - **HMR Bridging:** Uses **devMode** signals to bridge the gap between the pre-compiled Electron process and the Vite HMR environment.
 - **Stealth Audit Console:** Provides real-time metrics during **devMode** sessions to verify native Win32 window-affinity hooks.
 - **HMR Support:** Instant UI feedback without process restarts.

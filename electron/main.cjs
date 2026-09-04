@@ -6,7 +6,7 @@ const path = require('path');
 
 // --- Load Modules ---
 const config = require('./config.cjs');
-const native = require('./native.cjs');
+const native = require('./platform/index.cjs');
 const gemini = require('./gemini.cjs');
 
 // --- Environment Setup ---
@@ -506,6 +506,8 @@ function createWindow() {
 app.setName('Service Host: Runtime');
 
 app.whenReady().then(() => {
+    if (process.platform === 'darwin') app.dock.hide();
+    
     // Shortcuts
     app.on('will-quit', () => globalShortcut.unregisterAll());
 

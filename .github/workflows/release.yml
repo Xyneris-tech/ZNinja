@@ -1,6 +1,7 @@
 name: Build and Release ZNinja
 
 on:
+  workflow_dispatch:
   push:
     # Only run this workflow when you push a tag that looks like a version number (e.g., v2.7.0)
     tags:

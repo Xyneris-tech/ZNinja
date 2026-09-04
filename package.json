@@ -27,7 +27,17 @@
     "win": {
       "target": "nsis",
       "executableName": "zninja",
-      "icon": "resources/zninja.ico"
+      "icon": "resources/zninja.ico",
+      "files": [
+        "!electron/platform/mac/*"
+      ]
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "resources/zninja.png",
+      "files": [
+        "!electron/platform/win/*"
+      ]
     },
     "nsis": {
       "oneClick": false,

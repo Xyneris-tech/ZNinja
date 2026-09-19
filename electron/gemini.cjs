@@ -521,7 +521,13 @@ Strictly adhere to the following rules:
                     errorMessage.includes('not found') ||
                     errorMessage.includes('unavailable') || 
                     errorMessage.includes('overloaded') ||
-                    errorMessage.includes('503');
+                    errorMessage.includes('503') ||
+                    errorMessage.includes('403') ||
+                    errorMessage.includes('forbidden') ||
+                    errorMessage.includes('invalid') ||
+                    errorMessage.includes('permission') ||
+                    errorMessage.includes('401') ||
+                    errorMessage.includes('unauthorized');
 
                 if (isRetryableError) {
                     console.warn(`Key #${kIndex + 1} failed for ${modelId} (${error.message}). Checking next key...`);
@@ -861,7 +867,13 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
                     errorMessage.includes('not found') ||
                     errorMessage.includes('unavailable') || 
                     errorMessage.includes('overloaded') ||
-                    errorMessage.includes('503');
+                    errorMessage.includes('503') ||
+                    errorMessage.includes('403') ||
+                    errorMessage.includes('forbidden') ||
+                    errorMessage.includes('invalid') ||
+                    errorMessage.includes('permission') ||
+                    errorMessage.includes('401') ||
+                    errorMessage.includes('unauthorized');
 
                 if (isRetryableError) {
                     console.warn(`Key #${kIndex + 1} failed for ${modelId} (${error.message}). Checking next key...`);

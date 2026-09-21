@@ -19,53 +19,83 @@ function abortActiveStream() {
 
 // List Models
 async function listModels(explicitKey = null) {
-    try {
-        let models = [];
-        const apiKey = explicitKey || getApiKey();
-        if (!apiKey) throw new Error("API Key not found");
+    let apiErrorType = null;
+    let keysToCheck = [];
 
-        // Use v1beta for widest model discovery including experimental ones
+    if (explicitKey) {
+        keysToCheck = [explicitKey];
+    } else {
+        keysToCheck = getApiKeys();
+    }
+
+    if (keysToCheck.length === 0) {
+        apiErrorType = 'invalid_key';
+        return { success: false, apiErrorType, invalidIndices: [] };
+    }
+
+    let models = [];
+    let invalidIndices = [];
+    let anySuccess = false;
+
+    const results = await Promise.allSettled(keysToCheck.map(async (apiKey) => {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-        
         if (!response.ok) {
             throw new Error(`API Error: ${response.status} ${response.statusText}`);
         }
-
         const data = await response.json();
-
-        if (data.models) {
-            models = data.models
-                .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
-                .map(m => m.name.replace('models/', ''));
-            
-            // Deduplicate and clean
-            models = [...new Set(models)];
-        } 
-
-        if (models.length === 0) {
+        if (!data.models || data.models.length === 0) {
             throw new Error("No models returned from API");
         }
+        return data.models
+            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+            .map(m => m.name.replace('models/', ''));
+    }));
 
-        return { success: true, models };
-    } catch (error) {
-        console.warn('List Models Fetch failed, using fallback:', error.message);
-        // Robust Fallback (Stable & Experimental)
-        return {
-            success: true, 
-            models: [
-                "gemini-2.0-flash-exp",
-                "gemini-2.0-flash-thinking-exp",
-                "gemini-3-flash",
-                "gemini-2.5-flash",
-                "gemini-1.5-pro",
-                "gemini-1.5-pro-002",
-                "gemini-1.5-flash",
-                "gemini-1.5-flash-8b",
-                "gemini-1.5-flash-002",
-                "gemini-1.0-pro"
-            ]
-        };
+    results.forEach((result, i) => {
+        if (result.status === 'fulfilled') {
+            anySuccess = true;
+            models = [...models, ...result.value];
+        } else {
+            const errorMsg = result.reason.message.toLowerCase();
+            console.warn(`List Models Fetch failed for key #${i + 1}:`, result.reason.message);
+            if (errorMsg.includes('429') || errorMsg.includes('quota')) {
+                apiErrorType = 'quota'; // We keep the key, just out of quota
+            } else if (errorMsg.includes('400') || errorMsg.includes('401') || errorMsg.includes('403')) {
+                invalidIndices.push(i);
+                apiErrorType = 'invalid_key';
+            } else {
+                invalidIndices.push(i);
+                apiErrorType = 'invalid_key';
+            }
+        }
+    });
+
+    if (anySuccess) {
+        // Deduplicate and clean
+        models = [...new Set(models)];
+        // If there was any success, we clear the apiErrorType so the banner doesn't show up wrongly,
+        // UNLESS we want to show it? We just return invalidIndices for the SetupScreen.
+        return { success: true, models, invalidIndices };
     }
+    
+    // Robust Fallback (Stable & Experimental)
+    return {
+        success: true, 
+        apiErrorType,
+        invalidIndices,
+        models: [
+            "gemini-2.0-flash-exp",
+            "gemini-2.0-flash-thinking-exp",
+            "gemini-3-flash",
+            "gemini-2.5-flash",
+            "gemini-1.5-pro",
+            "gemini-1.5-pro-002",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-flash-002",
+            "gemini-1.0-pro"
+        ]
+    };
 }
 
 // Run Deep Research via Interactions API

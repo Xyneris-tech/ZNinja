@@ -607,6 +607,7 @@ export const PromptInputBox = React.forwardRef((props, ref) => {
     selectedModel = "",
     setSelectedModel = () => { },
     onStop = () => { },
+    disabled = false,
   } = props;
 
   const [selectedImage, setSelectedImage] = React.useState(null);
@@ -777,7 +778,7 @@ export const PromptInputBox = React.forwardRef((props, ref) => {
           "w-full bg-[#1F2023] border-[#444444] shadow-[0_8px_30px_rgba(0,0,0,0.24)] transition-all duration-300 ease-in-out",
           className
         )}
-        disabled={isLoading}
+        disabled={isLoading || disabled}
         ref={ref || promptBoxRef}
         inputRef={inputRef}
         onDragOver={handleDragOver}
@@ -866,6 +867,7 @@ export const PromptInputBox = React.forwardRef((props, ref) => {
                 size="icon"
                 className="text-gray-400 hover:text-white rounded-full hover:bg-white/10 h-8 w-8"
                 onClick={() => uploadInputRef.current?.click()}
+                disabled={disabled}
               >
                 <PaperclipIcon className="h-[18px] w-[18px]" />
               </Button>
@@ -882,7 +884,7 @@ export const PromptInputBox = React.forwardRef((props, ref) => {
                     isCapturing ? "text-emerald-500 animate-pulse" : "text-gray-400 hover:text-white"
                   )}
                   onClick={handleCapture}
-                  disabled={isCapturing}
+                  disabled={isCapturing || disabled}
                 >
                   {isCapturing ? (
                     <div className="w-[18px] h-[18px] border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -905,6 +907,7 @@ export const PromptInputBox = React.forwardRef((props, ref) => {
                   showSearch ? "text-[#9b87f5]" : "text-gray-400 hover:text-white"
                 )}
                 onClick={() => handleToggleChange("search")}
+                disabled={disabled}
               >
                 <GlobeIcon className="h-[18px] w-[18px]" />
               </Button>
@@ -922,6 +925,7 @@ export const PromptInputBox = React.forwardRef((props, ref) => {
                   showThink ? "text-[#9b87f5]" : "text-gray-400 hover:text-white"
                 )}
                 onClick={() => handleToggleChange("think")}
+                disabled={disabled}
               >
                 <BrainCogIcon className="h-[18px] w-[18px]" />
               </Button>
@@ -945,7 +949,8 @@ export const PromptInputBox = React.forwardRef((props, ref) => {
                 <button
                   type="button"
                   onClick={() => setShowModelMenu(!showModelMenu)}
-                  className="bg-neutral-800/60 hover:bg-neutral-700/80 text-[11px] text-neutral-300 px-2.5 py-1 rounded-md border border-white/5 flex items-center gap-1.5 transition-all duration-200 font-mono"
+                  className="bg-neutral-800/60 hover:bg-neutral-700/80 text-[11px] text-neutral-300 px-2.5 py-1 rounded-md border border-white/5 flex items-center gap-1.5 transition-all duration-200 font-mono disabled:opacity-50 disabled:pointer-events-none"
+                  disabled={disabled}
                 >
                   <span>{selectedModel.split('/').pop()}</span>
                   <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-300 ${showModelMenu ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -994,12 +999,12 @@ export const PromptInputBox = React.forwardRef((props, ref) => {
                   size="icon"
                   className={cn(
                     "rounded-full shadow-lg h-[34px] w-[34px] active:scale-95 transition-all",
-                    hasContent
+                    hasContent && !disabled
                       ? "bg-white text-black hover:bg-white/90"
                       : "bg-[#2E3033] text-gray-500 cursor-not-allowed"
                   )}
                   onClick={handleSubmit}
-                  disabled={!hasContent}
+                  disabled={!hasContent || disabled}
                 >
                   <ArrowUpIcon className="h-[18px] w-[18px] stroke-[2.5]" />
                 </Button>

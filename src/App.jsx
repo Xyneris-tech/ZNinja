@@ -91,8 +91,11 @@ function App() {
   const [checkingKey, setCheckingKey] = useState(true);
   const [setupKeys, setSetupKeys] = useState(['']);
   const [setupError, setSetupError] = useState('');
+  const [apiErrorType, setApiErrorType] = useState(null);
   const [workingMode, setWorkingMode] = useState('general');
   const [isEncrypted, setIsEncrypted] = useState(true); // Default to encrypted
+  const [invalidSlots, setInvalidSlots] = useState([]);
+  const [isValidating, setIsValidating] = useState(false);
 
   // ... (useEffect for models and history - unchanged) ...
 
@@ -110,6 +113,7 @@ function App() {
         .then(result => {
           if (result && result.success && Array.isArray(result.models) && result.models.length > 0) {
             setAvailableModels(result.models);
+            setApiErrorType(result.apiErrorType || null);
             
             // If currently selected model is NOT in the available list, reset it
             if (!result.models.includes(selectedModel)) {
@@ -121,6 +125,7 @@ function App() {
              console.warn("API returned no allowed models, using defaults.");
              const fallbacks = ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-3.1-pro'];
              setAvailableModels(fallbacks); 
+             setApiErrorType('invalid_key'); // default assumption on full fail
              if (!fallbacks.includes(selectedModel)) setSelectedModel(fallbacks[0]);
           }
         })
@@ -145,17 +150,34 @@ function App() {
         return;
     }
     
-    if (window.electron && window.electron.saveApiKey) {
-        const success = await window.electron.saveApiKey({ 
-            keys: filteredKeys,
-            encrypted: isEncrypted
-        });
-        if (success) {
-            setIsSetup(true);
-            fetchModels();
-        } else {
-            setSetupError('Failed to save API Keys');
+    setIsValidating(true);
+    try {
+        if (window.electron && window.electron.saveApiKey) {
+            const result = await window.electron.saveApiKey({ 
+                keys: filteredKeys,
+                encrypted: isEncrypted
+            });
+            if (result && result.success) {
+                const validation = result.validation;
+                if (validation && validation.invalidIndices && validation.invalidIndices.length > 0) {
+                    setInvalidSlots(validation.invalidIndices);
+                    if (validation.invalidIndices.length === filteredKeys.length) {
+                        setSetupError('All provided API keys are invalid.');
+                    } else {
+                        setSetupError('Some API keys are invalid. Please fix or remove them.');
+                    }
+                    return; // Stay on SetupScreen so they can see which ones are invalid
+                }
+                
+                setInvalidSlots([]);
+                setIsSetup(true);
+                fetchModels();
+            } else {
+                setSetupError('Failed to save API Keys');
+            }
         }
+    } finally {
+        setIsValidating(false);
     }
   };
 
@@ -662,6 +684,8 @@ function App() {
             onSave={handleSaveKey} 
             isEncrypted={isEncrypted}
             setIsEncrypted={setIsEncrypted}
+            invalidSlots={invalidSlots}
+            isValidating={isValidating}
         />
       );
   }
@@ -794,6 +818,7 @@ function App() {
                         setWorkingMode={setWorkingMode}
                         isCapturing={isCapturing}
                         onStop={handleStopGeneration}
+                        apiErrorType={apiErrorType}
                     />
                 </div>
 

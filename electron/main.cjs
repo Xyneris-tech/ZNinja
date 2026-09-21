@@ -80,14 +80,16 @@ function createWindow() {
             // Immediately fetch available models for this new key
             const modelResult = await gemini.listModels();
             if (modelResult.success) {
-                config.saveAvailableModels(modelResult.models);
+                config.saveAvailableModels(modelResult.models, modelResult.apiErrorType);
             }
 
             win.setResizable(true);
             win.setSize(600, 400);
             win.setResizable(false);
+            
+            return { success: true, validation: modelResult };
         }
-        return success;
+        return { success: false };
     });
     ipcMain.handle('get-api-key', () => config.getApiKey());
     ipcMain.handle('get-api-keys', () => config.getApiKeys());
@@ -110,9 +112,9 @@ function createWindow() {
     // Gemini
     ipcMain.handle('list-models', async () => {
         // Try to get from local config first (Fast)
-        const storedModels = config.getAvailableModels();
-        if (storedModels && storedModels.length > 0) {
-            return { success: true, models: storedModels };
+        const stored = config.getAvailableModels();
+        if (stored && stored.models && stored.models.length > 0) {
+            return { success: true, models: stored.models, apiErrorType: stored.apiErrorType };
         }
         // Fallback to fresh fetch if none stored
         return gemini.listModels();

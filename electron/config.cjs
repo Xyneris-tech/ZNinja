@@ -119,6 +119,9 @@ function clearApiKey() {
             if (current.availableModels) {
                 delete current.availableModels;
             }
+            if (current.apiErrorType) {
+                delete current.apiErrorType;
+            }
             fs.writeFileSync(configPath, JSON.stringify(current, null, 2));
         }
         return true;
@@ -132,7 +135,10 @@ function getAvailableModels() {
     try {
         if (fs.existsSync(configPath)) {
             const data = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            return data.availableModels || null;
+            return {
+                models: data.availableModels || null,
+                apiErrorType: data.apiErrorType || null
+            };
         }
     } catch (e) {
         console.error("Error reading available models:", e);
@@ -140,13 +146,14 @@ function getAvailableModels() {
     return null;
 }
 
-function saveAvailableModels(models) {
+function saveAvailableModels(models, apiErrorType = null) {
     try {
         let current = {};
         if (fs.existsSync(configPath)) {
             current = JSON.parse(fs.readFileSync(configPath, 'utf8'));
         }
         current.availableModels = models;
+        current.apiErrorType = apiErrorType;
         fs.writeFileSync(configPath, JSON.stringify(current, null, 2));
         return true;
     } catch (e) {

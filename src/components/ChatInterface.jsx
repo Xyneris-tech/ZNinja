@@ -182,7 +182,8 @@ const ChatInterface = ({
     workingMode,
     setWorkingMode,
     isCapturing,
-    onStop
+    onStop,
+    apiErrorType
 }) => {
     return (
         <div className="flex-1 flex flex-col w-full relative overflow-hidden min-h-0">
@@ -190,7 +191,20 @@ const ChatInterface = ({
             <MessageList messages={messages} />
 
             <div className="w-full p-3 relative py-2 bg-neutral-800/20 flex flex-col gap-2">
+                {apiErrorType === 'invalid_key' && (
+                    <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-2.5 rounded-xl text-xs text-center font-medium shadow-sm flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                    API Key not provided or invalid. Please reset & configure a valid key to continue using ZNinja.
+                    </div>
+                )}
+                {apiErrorType === 'quota' && (
+                    <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 p-2.5 rounded-xl text-xs text-center font-medium shadow-sm flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                        API Quota exceeded. Please check your Google AI Studio billing or use a different key.
+                    </div>
+                )}
                 <PromptInputBox
+                    disabled={apiErrorType !== null}
                     inputRef={inputRef}
                     value={inputValue}
                     onValueChange={setInputValue}

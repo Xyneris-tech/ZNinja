@@ -28,6 +28,8 @@ jobs:
       - name: Build macOS App
         # This will run your vite build && electron-builder command for mac
         run: npm run build -- --mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

@@ -1,13 +1,56 @@
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require("@google/generative-ai");
-const { getApiKey, getApiKeys, getSystemInstruction } = require('./config.cjs');
+const { getApiKeys, getSystemInstruction } = require('./config.cjs');
 
 // Helper to detect if key is Paid (Placeholder)
-async function checkTierInternal() {
-    // Current logic returns false (Free tier assumption or logic not fully implemented)
-    return false;
-}
+// async function checkTierInternal() {
+//     // Current logic returns false (Free tier assumption or logic not fully implemented)
+//     return false;
+// }
 
 let activeAbortController = null;
+let cachedAvailableModels = {};
+
+async function getAvailableModelsForKey(apiKey) {
+    if (cachedAvailableModels[apiKey] && cachedAvailableModels[apiKey].length > 0) return cachedAvailableModels[apiKey];
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if (!response.ok) return [];
+        const data = await response.json();
+        if (!data.models) return [];
+        const models = data.models.filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent')).map(m => m.name.replace('models/', ''));
+        cachedAvailableModels[apiKey] = models;
+        return models;
+    } catch (e) {
+        return [];
+    }
+}
+
+function buildDynamicSmartFallbacks(availableModels, prompt, image, audioData, workingMode) {
+    const lowerPrompt = prompt ? prompt.toLowerCase() : '';
+    const isVideo = lowerPrompt.includes('video');
+    const isCode = ['code', 'fix', 'api', 'o(n)', 'implementation', 'logic', 'algorithm'].some(k => lowerPrompt.includes(k)) || (prompt && prompt.length > 300) || image;
+    let candidates = [];
+    if (workingMode === 'research') {
+        candidates = availableModels.filter(m => m.includes('deep-research'));
+        if (candidates.length === 0) candidates = availableModels.filter(m => m.includes('pro') || m.includes('thinking'));
+    } else if (audioData) {
+        candidates = availableModels.filter(m => m.includes('tts') || m.includes('audio'));
+        if (candidates.length === 0) candidates = availableModels.filter(m => m.includes('pro') || m.includes('flash'));
+    } else if (isVideo) {
+        candidates = availableModels.filter(m => m.includes('veo') || m.includes('video'));
+        if (candidates.length === 0) candidates = availableModels.filter(m => m.includes('pro') || m.includes('flash'));
+    } else if (isCode) {
+        candidates = availableModels.filter(m => m.includes('pro') || m.includes('thinking'));
+        if (candidates.length === 0) candidates = availableModels.filter(m => m.includes('flash'));
+    } else {
+        candidates = availableModels.filter(m => m.includes('flash') && !m.includes('tts') && !m.includes('veo'));
+    }
+    let anti = availableModels.filter(m => !m.includes('tts') && !m.includes('embedding') && !m.includes('veo') && !m.includes('vision') && !m.includes('gemma'));
+    let gemmaModels = availableModels.filter(m => m.includes('gemma'));
+    let finalFallbacks = [...candidates, ...gemmaModels, ...anti];
+    if (finalFallbacks.length === 0 && availableModels.length > 0) finalFallbacks = [availableModels[0]];
+    return finalFallbacks.filter((v, i, a) => v && a.indexOf(v) === i);
+}
 
 function abortActiveStream() {
     if (activeAbortController) {
@@ -93,7 +136,11 @@ async function listModels(explicitKey = null) {
             "gemini-1.5-flash",
             "gemini-1.5-flash-8b",
             "gemini-1.5-flash-002",
-            "gemini-1.0-pro"
+            "gemini-1.0-pro",
+            "gemma-4-26b-a4b-it",
+            "gemma-2-9b-it",
+            "gemma-2-27b-it"
+            
         ]
     };
 }
@@ -207,73 +254,19 @@ async function runDeepResearch({ prompt, modelId, apiKey, systemInstruction, onP
 
 // Ask Gemini
 async function askGemini({ prompt, modelName, images, image, audioData, history = [], workingMode }) {
-    let smartFallbacks = [];
-    const isPro = await checkTierInternal();
-
-    // --- SMART ROUTER LOGIC ---
-    if (workingMode === 'research') {
-        console.log("ZNinja Router: Deep Research active. Prioritizing native deep research models.");
-        smartFallbacks = [
-            "deep-research-preview-04-2026",
-            "deep-research-max-preview-04-2026",
-            "deep-research-pro-preview-12-2025"
-        ];
-        if (modelName === 'zninja-auto-smart' || !modelName.includes('deep-research')) {
-            modelName = smartFallbacks[0];
-        }
-    } else {
-        if (modelName && modelName.includes('deep-research')) {
-            modelName = 'zninja-auto-smart';
-        }
-        if (modelName === 'zninja-auto-smart') {
-            const lowerPrompt = prompt ? prompt.toLowerCase() : '';
-            const codingKeywords = ['code', 'fix', 'api', 'o(n)', 'implementation', 'logic', 'algorithm'];
-            const isComplex = image || audioData || codingKeywords.some(k => lowerPrompt.includes(k)) || (prompt && prompt.length > 300);
-
-            if (isComplex) {
-                console.log("ZNinja Router: Complex/Coding detected.");
-                smartFallbacks = [
-                    "gemini-3.1-pro-preview",
-                    "gemini-2.5-pro",
-                    "gemini-3-pro-preview"
-                ];
-            } else {
-                console.log("ZNinja Router: Simple Chat detected.");
-                smartFallbacks = [
-                    "gemini-2.5-flash-lite",
-                    "gemini-3-flash-preview",
-                    "gemini-2.5-flash"
-                ];
-            }
-            modelName = smartFallbacks[0];
-        }
+    const cleanedPrompt = (prompt || "").trim().toLowerCase().replace(/[^a-z0-9 ]/g, '');
+    const greetings = ["hi", "hello", "hey", "hi there", "hello there", "hey there", "sup", "yo", "hlo"];
+    const hasMedia = (Array.isArray(images) && images.filter(Boolean).length > 0) || image || audioData;
+    if (greetings.includes(cleanedPrompt) && !hasMedia) {
+        return { success: true, text: "hey, how can i help you?", usedModel: "zninja-fast-reply" };
     }
 
-    const baseFallbacks = workingMode === 'research' ? [
-        "deep-research-preview-04-2026",
-        "deep-research-max-preview-04-2026",
-        "deep-research-pro-preview-12-2025"
-    ] : [];
-
-    const modelFallbacks = [
-        ...smartFallbacks,
-        modelName,
-        ...baseFallbacks,
-        "gemini-2.0-flash-thinking-exp",
-        "gemini-3-flash",
-        "gemini-2.5-flash",
-        "gemini-1.5-pro",
-        "gemini-1.5-flash-002",
-        "gemini-1.5-flash"
-    ].filter((v, i, a) => v && a.indexOf(v) === i);
-
-    // --- SYSTEM INSTRUCTION LOGIC ---
     const MODE_INSTRUCTIONS = {
         'general': `You are ZNinja, an ultra-direct and highly efficient assistant.
 - Give the final correct answer or solution immediately as the very first sentence.
 - Eliminate all conversational filler, introductory pleasantries, and redundant explanations.
-- Keep reasoning high-density, concise, and purely factual.`,
-
+- Keep reasoning high-density, concise, and purely factual.
+- EXCEPTION: If the user simply says hello or sends a casual greeting, respond instantly with "Hey, how can I help you?" and skip any strict persona enforcement or deep thinking.`,
         'code': `You are ZNinja, an Elite Senior Software Engineer.
 - Deliver 100% complete, fully functional, production-ready code.
 - Absolutely NO placeholders, no truncated snippets, and no comments like "// TODO" or "// ... rest of code".
@@ -283,13 +276,11 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
   2. The complete, clean code block.
   3. Time & Space complexity in Big O notation.
 - Eliminate any introductory or concluding conversational fluff.`,
-
         'competitive': `You are ZNinja, an Elite Algorithmic Solver.
 - Deliver the optimal, complete algorithmic solution immediately.
 - Use clean, idiomatic code with optimal time and space complexity.
 - Absolutely NO comments in the code, NO intro, NO outro, NO explanations, and NO conversational noise.
-- Output ONLY the ready-to-paste code block containing the complete solution that gives correct output on the provided testcases (if provided).`,
-
+- Output ONLY the ready-to-paste code block containing the complete solution.`,
         'research': `You are ZNinja, an Elite Research Analyst.
 - Conduct a deep, rigorous, and highly comprehensive research process.
 - Leverage web search results to fact-check, analyze, and synthesize in-depth findings.
@@ -300,7 +291,6 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
   4. Verified Sources: List active web URLs and citations.
 - Maintain an authoritative, objective, and analytical tone.
 - Eliminate all conversational fluff, intro, and outro.`,
-
         'quiz': `You are ZNinja, an Expert Academic Tutor.
 - Output the correct option immediately (e.g., "Option A: [Option Content]").
 - Provide exactly one concise sentence justifying the correctness.
@@ -321,13 +311,25 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
         return { success: false, error: "No API Keys configured. Please go to Setup." };
     }
 
-    // --- EXECUTION LOOP (Models x Keys) ---
-    for (const modelId of modelFallbacks) {
-        if (!modelId) continue;
+    // --- EXECUTION LOOP (Keys x Models) ---
+    for (let kIndex = 0; kIndex < apiKeys.length; kIndex++) {
+        const currentKey = apiKeys[kIndex];
+        const availableModels = await getAvailableModelsForKey(currentKey);
         
-        for (let kIndex = 0; kIndex < apiKeys.length; kIndex++) {
-            const currentKey = apiKeys[kIndex];
-            
+        let currentModelFallbacks = [modelName];
+        if (modelName === 'zninja-auto-smart' || (workingMode === 'research' && (!modelName || !modelName.includes('deep-research')))) {
+            currentModelFallbacks = buildDynamicSmartFallbacks(availableModels, prompt, image, audioData, workingMode);
+        } else if (modelName && modelName.includes('deep-research')) {
+            currentModelFallbacks = [modelName];
+        }
+        currentModelFallbacks = currentModelFallbacks.filter((v, i, a) => v && a.indexOf(v) === i);
+        
+        if (currentModelFallbacks.length === 0) {
+            console.warn(`No models available for Key #${kIndex + 1}`);
+            continue;
+        }
+
+        for (const modelId of currentModelFallbacks) {
             try {
                 console.log(`Attempting Gemini (${modelId}) with Key #${kIndex + 1}...`);
                 const genAI = new GoogleGenerativeAI(currentKey);
@@ -349,12 +351,7 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
                     return { success: true, text: resultText, usedModel: modelId };
                 }
 
-                const modelOptions = {
-                    model: modelId,
-                    systemInstruction: systemInstruction
-                };
-
-                // Enable Search Grounding by default for 2.x/3.x non-thinking, non-research models
+                const modelOptions = { model: modelId, systemInstruction: systemInstruction };
                 if (!isThinkingModel && !isLegacyModel && !isDeepResearchModel) {
                     modelOptions.tools = [{ googleSearch: {} }];
                 }
@@ -368,36 +365,21 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
                         const base64Data = audioData.split(',')[1];
                         const parts = audioData.split(';');
                         const mimeType = parts[0].split(':')[1] || 'audio/webm';
-
                         const textPrompt = prompt || `Prepare professional Minutes of Meeting from this audio.`;
-
-                        const contentParts = [
-                            { text: textPrompt },
-                            { inlineData: { data: base64Data, mimeType: mimeType } }
-                        ];
-
+                        const contentParts = [{ text: textPrompt }, { inlineData: { data: base64Data, mimeType: mimeType } }];
                         const genConfig = { maxOutputTokens: 65536 };
                         if (modelId.includes('thinking') || modelId.includes('gemini-3')) {
                             genConfig.thinkingConfig = { includeThoughts: true, thinkingLevel: "HIGH" };
                         }
-
                         return activeModel.generateContent({
                             contents: [{ role: 'user', parts: contentParts }],
                             generationConfig: genConfig,
-                            safetySettings: [
-                                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                            ]
+                            safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }]
                         });
                     } else if (allImages.length > 0) {
                         let visionInstructions = "Analyze attachment directly.";
-                        if (allImages.every(img => img.startsWith("data:image/"))) {
-                            visionInstructions = "Analyze image directly.";
-                        } else if (allImages.every(img => img.startsWith("data:audio/"))) {
-                            visionInstructions = "Analyze audio directly.";
-                        }
+                        if (allImages.every(img => img.startsWith("data:image/"))) { visionInstructions = "Analyze image directly."; } 
+                        else if (allImages.every(img => img.startsWith("data:audio/"))) { visionInstructions = "Analyze audio directly."; }
                         if (workingMode === 'competitive') visionInstructions = "Solve the CP problem in the image.";
                         else if (workingMode === 'quiz') visionInstructions = "Solve this quiz question.";
 
@@ -413,34 +395,21 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
                         if (modelId.includes('thinking') || modelId.includes('gemini-3')) {
                             visionConfig.thinkingConfig = { includeThoughts: true, thinkingLevel: "HIGH" };
                         }
-
                         return activeModel.generateContent({
                             contents: [{ role: 'user', parts: visionParts }],
                             generationConfig: visionConfig,
-                            safetySettings: [
-                                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                            ]
+                            safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }]
                         });
                     } else {
                         const genConfig = { maxOutputTokens: 65536 };
                         if (modelId.includes('thinking') || modelId.includes('gemini-3')) {
                             genConfig.thinkingConfig = { includeThoughts: true, thinkingLevel: "HIGH" };
                         }
-
                         const chat = activeModel.startChat({
                             history: history,
                             generationConfig: genConfig,
-                            safetySettings: [
-                                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                            ]
+                            safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }]
                         });
-
                         return chat.sendMessage(prompt || ".");
                     }
                 };
@@ -449,11 +418,7 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
                     result = await executeCall(model);
                 } catch (callError) {
                     const errorMsg = (callError.message || '').toLowerCase();
-                    const isToolError = errorMsg.includes('tool') || 
-                                       errorMsg.includes('grounding') || 
-                                       errorMsg.includes('invalid_argument') || 
-                                       errorMsg.includes('unsupported');
-                    
+                    const isToolError = errorMsg.includes('tool') || errorMsg.includes('grounding') || errorMsg.includes('invalid_argument') || errorMsg.includes('unsupported');
                     if (isToolError && modelOptions.tools) {
                         console.warn(`Search grounding unsupported on ${modelId} (${callError.message}). Retrying without tools...`);
                         delete modelOptions.tools;
@@ -471,70 +436,28 @@ async function askGemini({ prompt, modelName, images, image, audioData, history 
                 
                 let text = response.text();
 
-                // Critique-and-refining pass for code/competitive modes if laziness is detected
                 if (text && (workingMode === 'code' || workingMode === 'competitive')) {
-                    const lazyPatterns = [
-                        /\/\/\s*\.\.\./i,            // // ...
-                        /\/\*\s*\.\.\.\s*\*\//i,    // /* ... */
-                        /#\s*\.\.\./i,               // # ...
-                        /\/\/\s*TODO/i,              // // TODO
-                        /\/\*\s*TODO/i,              // /* TODO
-                        /#\s*TODO/i,                 // # TODO
-                        /\/\/\s*rest of/i,           // // rest of
-                        /\/\/\s*implement/i,          // // implement
-                        /\/\/\s*write your/i,        // // write your
-                        /#\s*rest of/i,              // # rest of
-                        /#\s*implement/i,            // # implement
-                        /#\s*write your/i            // # write your
-                    ];
-
+                    const lazyPatterns = [/\/\/\s*\.\.\./i, /\/\*\s*\.\.\.\s*\*\//i, /#\s*\.\.\./i, /\/\/\s*TODO/i, /\/\*\s*TODO/i, /#\s*TODO/i, /\/\/\s*rest of/i, /\/\/\s*implement/i, /\/\/\s*write your/i, /#\s*rest of/i, /#\s*implement/i, /#\s*write your/i];
                     const hasLaziness = lazyPatterns.some(pattern => pattern.test(text));
                     if (hasLaziness) {
                         console.log("ZNinja Refiner: Lazy placeholder detected in first draft. Initiating refinement pass...");
                         try {
-                            const refinerPrompt = `The user asked for:
-"${prompt}"
-
-Here is an incomplete draft that contains placeholders, lazy comments (like "// ...", "// TODO"), or missing implementations:
-\`\`\`
-${text}
-\`\`\`
-
-You must rewrite this and output a 100% complete, fully implemented, ready-to-run solution.
-Strictly adhere to the following rules:
-1. Do NOT use any placeholders, inline TODOs, or truncated snippets under any circumstances. Implement EVERY single method, variable, and class completely.
-2. Maintain clean, highly readable code with absolutely minimal or zero comments. Do not write obvious comments.
-3. Match the direct, high-density system instruction style (no conversational fillers, no explanations before/after code unless requested).`;
-
+                            const refinerPrompt = `The user asked for:\n"${prompt}"\n\nHere is an incomplete draft:\n\`\`\`\n${text}\n\`\`\`\n\nYou must rewrite this and output a 100% complete, fully implemented, ready-to-run solution.`;
                             const refinerModel = genAI.getGenerativeModel(modelOptions);
-                            let refinerResult;
-                            
                             const refConfig = { maxOutputTokens: 65536 };
-                            if (modelId.includes('thinking') || modelId.includes('gemini-3')) {
-                                refConfig.thinkingConfig = { includeThoughts: true, thinkingLevel: "HIGH" };
-                            }
-
-                            refinerResult = await refinerModel.generateContent({
+                            if (modelId.includes('thinking') || modelId.includes('gemini-3')) { refConfig.thinkingConfig = { includeThoughts: true, thinkingLevel: "HIGH" }; }
+                            const refinerResult = await refinerModel.generateContent({
                                 contents: [{ role: 'user', parts: [{ text: refinerPrompt }] }],
                                 generationConfig: refConfig,
-                                safetySettings: [
-                                    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                ]
+                                safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }]
                             });
-
                             const refinerResponse = await refinerResult.response;
                             if (refinerResponse.candidates && refinerResponse.candidates.length > 0) {
                                 const refinedText = refinerResponse.text();
-                                if (refinedText && refinedText.trim().length > 0) {
-                                    console.log("ZNinja Refiner: Refinement successful. Returning complete code.");
-                                    text = refinedText;
-                                }
+                                if (refinedText && refinedText.trim().length > 0) { text = refinedText; }
                             }
                         } catch (refError) {
-                            console.error("ZNinja Refiner failed, falling back to original draft:", refError.message);
+                            console.error("ZNinja Refiner failed:", refError.message);
                         }
                     }
                 }
@@ -544,27 +467,17 @@ Strictly adhere to the following rules:
             } catch (error) {
                 const errorMessage = error.message.toLowerCase();
                 const isRetryableError = 
-                    errorMessage.includes('429') || 
-                    errorMessage.includes('quota') || 
-                    errorMessage.includes('limit') ||
-                    errorMessage.includes('404') || 
-                    errorMessage.includes('not found') ||
-                    errorMessage.includes('unavailable') || 
-                    errorMessage.includes('overloaded') ||
-                    errorMessage.includes('503') ||
-                    errorMessage.includes('403') ||
-                    errorMessage.includes('forbidden') ||
-                    errorMessage.includes('invalid') ||
-                    errorMessage.includes('permission') ||
-                    errorMessage.includes('401') ||
-                    errorMessage.includes('unauthorized');
+                    errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('limit') ||
+                    errorMessage.includes('404') || errorMessage.includes('not found') || errorMessage.includes('unavailable') || 
+                    errorMessage.includes('overloaded') || errorMessage.includes('503') || errorMessage.includes('403') ||
+                    errorMessage.includes('forbidden') || errorMessage.includes('invalid') || errorMessage.includes('permission') ||
+                    errorMessage.includes('401') || errorMessage.includes('unauthorized') || errorMessage.includes('400') || errorMessage.includes('bad request') || errorMessage.includes('500') || errorMessage.includes('internal');
 
                 if (isRetryableError) {
-                    console.warn(`Key #${kIndex + 1} failed for ${modelId} (${error.message}). Checking next key...`);
-                    continue; // Try next API Key
+                    console.warn(`Model ${modelId} failed on Key #${kIndex + 1} (${error.message}). Checking next model in fallback list...`);
+                    continue; 
                 }
                 
-                // If not retryable, or last key failed, move to next model fallback
                 console.error(`Fatal error for ${modelId} with Key #${kIndex + 1}:`, error.message);
                 break; 
             }
@@ -575,115 +488,33 @@ Strictly adhere to the following rules:
 
 // Stream Gemini
 async function streamGemini({ prompt, modelName, images, image, history = [], workingMode }, callbacks) {
-    // Cancel any current stream before starting a new one
-    abortActiveStream();
+    const cleanedPrompt = (prompt || "").trim().toLowerCase().replace(/[^a-z0-9 ]/g, '');
+    const greetings = ["hi", "hello", "hey", "hi there", "hello there", "hey there", "sup", "yo", "hlo"];
+    const hasMedia = (Array.isArray(images) && images.filter(Boolean).length > 0) || image;
+    if (greetings.includes(cleanedPrompt) && !hasMedia) {
+        if (callbacks.onChunk) callbacks.onChunk({ text: "hey, how can i help you?" });
+        if (callbacks.onDone) callbacks.onDone("zninja-fast-reply");
+        return;
+    }
 
+    abortActiveStream();
     const controller = new AbortController();
     activeAbortController = controller;
     const signal = controller.signal;
 
-    let smartFallbacks = [];
-    const isPro = await checkTierInternal();
-
-    // --- SMART ROUTER LOGIC ---
-    if (workingMode === 'research') {
-        console.log("ZNinja Router: Deep Research active. Prioritizing native deep research models.");
-        smartFallbacks = [
-            "deep-research-preview-04-2026",
-            "deep-research-max-preview-04-2026",
-            "deep-research-pro-preview-12-2025"
-        ];
-        if (modelName === 'zninja-auto-smart' || !modelName.includes('deep-research')) {
-            modelName = smartFallbacks[0];
-        }
-    } else {
-        if (modelName && modelName.includes('deep-research')) {
-            modelName = 'zninja-auto-smart';
-        }
-        if (modelName === 'zninja-auto-smart') {
-            const lowerPrompt = prompt ? prompt.toLowerCase() : '';
-            const codingKeywords = ['code', 'fix', 'api', 'o(n)', 'implementation', 'logic', 'algorithm'];
-            const isComplex = image || codingKeywords.some(k => lowerPrompt.includes(k)) || (prompt && prompt.length > 300);
-
-            if (isComplex) {
-                console.log("ZNinja Router: Complex/Coding detected.");
-                smartFallbacks = [
-                    "gemini-3.1-pro-preview",
-                    "gemini-2.5-pro",
-                    "gemini-3-pro-preview"
-                ];
-            } else {
-                console.log("ZNinja Router: Simple Chat detected.");
-                smartFallbacks = [
-                    "gemini-2.5-flash-lite",
-                    "gemini-3-flash-preview",
-                    "gemini-2.5-flash"
-                ];
-            }
-            modelName = smartFallbacks[0];
-        }
-    }
-
-    const baseFallbacks = workingMode === 'research' ? [
-        "deep-research-preview-04-2026",
-        "deep-research-max-preview-04-2026",
-        "deep-research-pro-preview-12-2025"
-    ] : [];
-
-    const modelFallbacks = [
-        ...smartFallbacks,
-        modelName,
-        ...baseFallbacks,
-        "gemini-2.0-flash-thinking-exp",
-        "gemini-3-flash",
-        "gemini-2.5-flash",
-        "gemini-1.5-pro",
-        "gemini-1.5-flash-002",
-        "gemini-1.5-flash"
-    ].filter((v, i, a) => v && a.indexOf(v) === i);
-
-    // --- SYSTEM INSTRUCTION LOGIC ---
     const MODE_INSTRUCTIONS = {
         'general': `You are ZNinja, an ultra-direct and highly efficient assistant.
 - Give the final correct answer or solution immediately as the very first sentence.
 - Eliminate all conversational filler, introductory pleasantries, and redundant explanations.
-- Keep reasoning high-density, concise, and purely factual.`,
-
-        'code': `You are ZNinja, an Elite Senior Software Engineer.
-- Deliver 100% complete, fully functional, production-ready code.
-- Absolutely NO placeholders, no truncated snippets, and no comments like "// TODO" or "// ... rest of code".
-- Default to writing NO comments in the code. Code must be highly readable and self-documenting. A maximum of one single-line comment is permitted only for non-obvious algorithmic tricks.
-- Structure your output:
-  1. A one-sentence explanation of the approach/design.
-  2. The complete, clean code block.
-  3. Time & Space complexity in Big O notation.
-- Eliminate any introductory or concluding conversational fluff.`,
-
-        'competitive': `You are ZNinja, an Elite Algorithmic Solver.
-- Deliver the optimal, complete algorithmic solution immediately.
-- Use clean, idiomatic code with optimal time and space complexity.
-- Absolutely NO comments in the code, NO intro, NO outro, NO explanations, and NO conversational noise.
-- Output ONLY the ready-to-paste code block containing the complete solution.`,
-
-        'research': `You are ZNinja, an Elite Research Analyst.
-- Conduct a deep, rigorous, and highly comprehensive research process.
-- Leverage web search results to fact-check, analyze, and synthesize in-depth findings.
-- Structure your output professionally:
-  1. Executive Summary: High-level overview of findings.
-  2. In-Depth Analysis: Detailed, structured sections with clear headings.
-  3. Key Takeaways: Bulleted list of critical insights.
-  4. Verified Sources: List active web URLs and citations.
-- Maintain an authoritative, objective, and analytical tone.
-- Eliminate all conversational fluff, intro, and outro.`,
-
-        'quiz': `You are ZNinja, an Expert Academic Tutor.
-- Output the correct option immediately (e.g., "Option A: [Option Content]").
-- Provide exactly one concise sentence justifying the correctness.
-- Absolutely NO extra text, introductory greeting, or closing conversation.`
+- Keep reasoning high-density, concise, and purely factual.
+- EXCEPTION: If the user simply says hello or sends a casual greeting, respond instantly with "Hey, how can I help you?" and skip any strict persona enforcement or deep thinking.`,
+        'code': `You are ZNinja, an Elite Senior Software Engineer.\n- Deliver 100% complete, fully functional, production-ready code.\n- Absolutely NO placeholders, no truncated snippets, and no comments like "// TODO" or "// ... rest of code".\n- Default to writing NO comments in the code. Code must be highly readable and self-documenting. A maximum of one single-line comment is permitted only for non-obvious algorithmic tricks.\n- Structure your output:\n  1. A one-sentence explanation of the approach/design.\n  2. The complete, clean code block.\n  3. Time & Space complexity in Big O notation.\n- Eliminate any introductory or concluding conversational fluff.`,
+        'competitive': `You are ZNinja, an Elite Algorithmic Solver.\n- Deliver the optimal, complete algorithmic solution immediately.\n- Use clean, idiomatic code with optimal time and space complexity.\n- Absolutely NO comments in the code, NO intro, NO outro, NO explanations, and NO conversational noise.\n- Output ONLY the ready-to-paste code block containing the complete solution.`,
+        'research': `You are ZNinja, an Elite Research Analyst.\n- Conduct a deep, rigorous, and highly comprehensive research process.\n- Leverage web search results to fact-check, analyze, and synthesize in-depth findings.\n- Structure your output professionally:\n  1. Executive Summary: High-level overview of findings.\n  2. In-Depth Analysis: Detailed, structured sections with clear headings.\n  3. Key Takeaways: Bulleted list of critical insights.\n  4. Verified Sources: List active web URLs and citations.\n- Maintain an authoritative, objective, and analytical tone.\n- Eliminate all conversational fluff, intro, and outro.`,
+        'quiz': `You are ZNinja, an Expert Academic Tutor.\n- Output the correct option immediately (e.g., "Option A: [Option Content]").\n- Provide exactly one concise sentence justifying the correctness.\n- Absolutely NO extra text, introductory greeting, or closing conversation.`
     };
 
     const defaultSystemInstruction = getSystemInstruction();
-    
     let systemInstruction = defaultSystemInstruction;
     if (workingMode && MODE_INSTRUCTIONS[workingMode]) {
         systemInstruction = MODE_INSTRUCTIONS[workingMode];
@@ -695,24 +526,37 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
         if (activeAbortController === controller) activeAbortController = null;
         return;
     }
-
-    // --- EXECUTION LOOP (Models x Keys) ---
-    for (const modelId of modelFallbacks) {
-        if (!modelId) continue;
+// --- EXECUTION LOOP (Keys x Models) ---
+    for (let kIndex = 0; kIndex < apiKeys.length; kIndex++) {
         if (signal.aborted) {
-            if (callbacks.onDone) callbacks.onDone(modelId);
+            if (callbacks.onDone) callbacks.onDone("aborted");
             if (activeAbortController === controller) activeAbortController = null;
             return;
         }
+
+        const currentKey = apiKeys[kIndex];
+        const availableModels = await getAvailableModelsForKey(currentKey);
         
-        for (let kIndex = 0; kIndex < apiKeys.length; kIndex++) {
+        let currentModelFallbacks = [modelName];
+        if (modelName === 'zninja-auto-smart' || (workingMode === 'research' && (!modelName || !modelName.includes('deep-research')))) {
+            currentModelFallbacks = buildDynamicSmartFallbacks(availableModels, prompt, image, null, workingMode);
+        } else if (modelName && modelName.includes('deep-research')) {
+            currentModelFallbacks = [modelName];
+        }
+        currentModelFallbacks = currentModelFallbacks.filter((v, i, a) => v && a.indexOf(v) === i);
+
+        if (currentModelFallbacks.length === 0) {
+            console.warn(`No models available for Key #${kIndex + 1}`);
+            continue;
+        }
+
+        for (const modelId of currentModelFallbacks) {
             if (signal.aborted) {
                 if (callbacks.onDone) callbacks.onDone(modelId);
                 if (activeAbortController === controller) activeAbortController = null;
                 return;
             }
-            const currentKey = apiKeys[kIndex];
-            
+
             try {
                 console.log(`Attempting Gemini Streaming (${modelId}) with Key #${kIndex + 1}...`);
                 const genAI = new GoogleGenerativeAI(currentKey);
@@ -722,9 +566,7 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
                 const isDeepResearchModel = (workingMode === 'research') && modelId.includes('deep-research');
 
                 if (isDeepResearchModel) {
-                    if (callbacks.onChunk) {
-                        callbacks.onChunk(`*   *[Step 1] Initializing deep research interaction with ${modelId}...*\n`);
-                    }
+                    if (callbacks.onChunk) callbacks.onChunk(`*   *[Step 1] Initializing deep research interaction with ${modelId}...*\n`);
                     const resultText = await runDeepResearch({
                         prompt: prompt,
                         modelId: modelId,
@@ -732,39 +574,23 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
                         systemInstruction: systemInstruction,
                         onProgress: (attempt) => {
                             if (callbacks.onChunk) {
-                                // Accumulate logs cleanly during progress
                                 let logs = "";
                                 for (let i = 1; i <= attempt + 1; i++) {
-                                    if (i === 1) {
-                                        logs += `*   *[Step 1] Initializing deep research interaction with ${modelId}...*\n`;
-                                    } else {
-                                        logs += `*   *[Step ${i}] Research agent is scanning sources and analyzing data... (running for ${(i - 1) * 5}s)*\n`;
-                                    }
+                                    if (i === 1) logs += `*   *[Step 1] Initializing deep research interaction with ${modelId}...*\n`;
+                                    else logs += `*   *[Step ${i}] Research agent is scanning sources and analyzing data... (running for ${(i - 1) * 5}s)*\n`;
                                 }
                                 callbacks.onChunk(logs, true);
                             }
                         },
                         signal: signal
                     });
-                    if (callbacks.onChunk) {
-                        // Replace everything with the clean final report once ready
-                        callbacks.onChunk(resultText, true);
-                    }
-                    if (callbacks.onDone) {
-                        callbacks.onDone(modelId, resultText);
-                    }
-                    if (activeAbortController === controller) {
-                        activeAbortController = null;
-                    }
+                    if (callbacks.onChunk) callbacks.onChunk(resultText, true);
+                    if (callbacks.onDone) callbacks.onDone(modelId, resultText);
+                    if (activeAbortController === controller) activeAbortController = null;
                     return; // Success!
                 }
 
-                const modelOptions = {
-                    model: modelId,
-                    systemInstruction: systemInstruction
-                };
-
-                // Enable Search Grounding by default for 2.x/3.x non-thinking, non-research models
+                const modelOptions = { model: modelId, systemInstruction: systemInstruction };
                 if (!isThinkingModel && !isLegacyModel && !isDeepResearchModel) {
                     modelOptions.tools = [{ googleSearch: {} }];
                 }
@@ -776,11 +602,8 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
                 const executeStreamCall = async (activeModel) => {
                     if (allImages.length > 0) {
                         let visionInstructions = "Analyze attachment directly.";
-                        if (allImages.every(img => img.startsWith("data:image/"))) {
-                            visionInstructions = "Analyze image directly.";
-                        } else if (allImages.every(img => img.startsWith("data:audio/"))) {
-                            visionInstructions = "Analyze audio directly.";
-                        }
+                        if (allImages.every(img => img.startsWith("data:image/"))) visionInstructions = "Analyze image directly.";
+                        else if (allImages.every(img => img.startsWith("data:audio/"))) visionInstructions = "Analyze audio directly.";
                         if (workingMode === 'competitive') visionInstructions = "Solve the CP problem in the image.";
                         else if (workingMode === 'quiz') visionInstructions = "Solve this quiz question.";
 
@@ -800,12 +623,7 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
                         return activeModel.generateContentStream({
                             contents: [{ role: 'user', parts: visionParts }],
                             generationConfig: visionConfig,
-                            safetySettings: [
-                                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                            ]
+                            safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }]
                         }, { signal });
                     } else {
                         const genConfig = { maxOutputTokens: 65536 };
@@ -816,12 +634,7 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
                         const chat = activeModel.startChat({
                             history: history,
                             generationConfig: genConfig,
-                            safetySettings: [
-                                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                            ]
+                            safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE }, { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }]
                         });
 
                         return chat.sendMessageStream(prompt || ".", { signal });
@@ -832,12 +645,8 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
                     resultStream = await executeStreamCall(model);
                 } catch (callError) {
                     if (signal.aborted) throw callError;
-
                     const errorMsg = (callError.message || '').toLowerCase();
-                    const isToolError = errorMsg.includes('tool') || 
-                                       errorMsg.includes('grounding') || 
-                                       errorMsg.includes('invalid_argument') || 
-                                       errorMsg.includes('unsupported');
+                    const isToolError = errorMsg.includes('tool') || errorMsg.includes('grounding') || errorMsg.includes('invalid_argument') || errorMsg.includes('unsupported');
                     
                     if (isToolError && modelOptions.tools) {
                         console.warn(`Search grounding unsupported for streaming on ${modelId} (${callError.message}). Retrying standard stream call...`);
@@ -849,7 +658,6 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
                     }
                 }
 
-                // Consume stream
                 for await (const chunk of resultStream.stream) {
                     if (signal.aborted) break;
                     
@@ -866,60 +674,43 @@ async function streamGemini({ prompt, modelName, images, image, history = [], wo
                         try {
                             const chunkText = chunk.text();
                             if (callbacks.onChunk) callbacks.onChunk({ text: chunkText });
-                        } catch (textErr) {
-                            console.warn("ZNinja Gemini: Chunk text fetch failed:", textErr.message);
-                        }
+                        } catch (textErr) {}
                     }
                 }
 
                 if (callbacks.onDone) callbacks.onDone(modelId);
-                if (activeAbortController === controller) {
-                    activeAbortController = null;
-                }
+                if (activeAbortController === controller) activeAbortController = null;
                 return; // Success!
 
             } catch (error) {
                 if (signal.aborted) {
                     console.log("ZNinja Gemini: Stream aborted by user.");
                     if (callbacks.onDone) callbacks.onDone(modelId);
-                    if (activeAbortController === controller) {
-                        activeAbortController = null;
-                    }
+                    if (activeAbortController === controller) activeAbortController = null;
                     return;
                 }
 
                 const errorMessage = error.message.toLowerCase();
                 const isRetryableError = 
-                    errorMessage.includes('429') || 
-                    errorMessage.includes('quota') || 
-                    errorMessage.includes('limit') ||
-                    errorMessage.includes('404') || 
-                    errorMessage.includes('not found') ||
-                    errorMessage.includes('unavailable') || 
-                    errorMessage.includes('overloaded') ||
-                    errorMessage.includes('503') ||
-                    errorMessage.includes('403') ||
-                    errorMessage.includes('forbidden') ||
-                    errorMessage.includes('invalid') ||
-                    errorMessage.includes('permission') ||
-                    errorMessage.includes('401') ||
-                    errorMessage.includes('unauthorized');
+                    errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('limit') ||
+                    errorMessage.includes('404') || errorMessage.includes('not found') || errorMessage.includes('unavailable') || 
+                    errorMessage.includes('overloaded') || errorMessage.includes('503') || errorMessage.includes('403') ||
+                    errorMessage.includes('forbidden') || errorMessage.includes('invalid') || errorMessage.includes('permission') ||
+                    errorMessage.includes('401') || errorMessage.includes('unauthorized') || errorMessage.includes('400') || 
+                    errorMessage.includes('bad request') || errorMessage.includes('500') || errorMessage.includes('internal');
 
                 if (isRetryableError) {
-                    console.warn(`Key #${kIndex + 1} failed for ${modelId} (${error.message}). Checking next key...`);
-                    continue; // Try next API Key
+                    console.warn(`Key #${kIndex + 1} failed for ${modelId} (${error.message}). Checking next model...`);
+                    continue; // Try next model
                 }
                 
-                // If not retryable, or last key failed, move to next model fallback
                 console.error(`Fatal error for ${modelId} with Key #${kIndex + 1}:`, error.message);
                 break; 
             }
         }
     }
     
-    if (activeAbortController === controller) {
-        activeAbortController = null;
-    }
+    if (activeAbortController === controller) activeAbortController = null;
     if (callbacks.onError) callbacks.onError("All API Keys and model fallbacks exhausted. Please check your network or quota.");
 }
 

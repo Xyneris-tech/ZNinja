@@ -29,15 +29,15 @@ async function main() {
       Z N I N J A  |  M O D E L  F E T C H E R
 ===================================================${colors.reset}\n`);
 
-    // Get API Key from arguments, .env, or environment
-    let apiKey = process.argv[2] || process.env.VITE_GEMINI || process.env.GEMINI_API_KEY;
+    // Get API Key from arguments or environment (server-side only; never use a VITE_-prefixed
+    // variable here, as that convention exposes values to client-side bundles)
+    let apiKey = process.argv[2] || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
         console.error(`${colors.fgRed}✖ Error: Gemini API Key not found!${colors.reset}`);
         console.log(`\nPlease provide your API key via one of these methods:`);
         console.log(`1. Pass it as a command line argument: ${colors.bright}node list-models.js YOUR_API_KEY${colors.reset}`);
-        console.log(`2. Define ${colors.fgYellow}VITE_GEMINI${colors.reset} in your ${colors.underscore}.env${colors.reset} file`);
-        console.log(`3. Set the ${colors.fgYellow}GEMINI_API_KEY${colors.reset} environment variable\n`);
+        console.log(`2. Set the ${colors.fgYellow}GEMINI_API_KEY${colors.reset} environment variable\n`);
         process.exit(1);
     }
 

@@ -1,3 +1,5 @@
+# (ZNinja is getting an error saying your quota has been exhausted for new users to access Google AI Studio. This error is on Google's side, and we are working on bringing alternative ways to use our app)
+
 # ZNinja (v2.6.0)
 
 A high-performance, minimalist AI companion built for stealth and efficiency. ZNinja operates as a background system process, providing seamless AI assistance across your entire Windows environment without leaving a trace in taskbars or screen recordings. Now featuring a specialized **Developer Mode** for real-time engine auditing and live-tuning.

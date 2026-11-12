@@ -9,7 +9,7 @@ A high-performance, minimalist AI companion built for stealth and efficiency. ZN
 ## Core Features
 
 ### 1. Advanced Stealth Architecture
-- **Process Masking:** Operates globally as `Service Host: Runtime`.
+- **Process Masking:** Operates globally as  `Service Host: Runtime`.
 - **Screen Privacy:** Automatically excludes itself from screen captures, Zoom meetings, OBS recordings, and proctoring software.
 - **Taskbar-Free:** Runs as a background utility, leaving your taskbar clean.
 - **Frameless UI:** Minimalist, transparent interface with no OS-level window decorations.

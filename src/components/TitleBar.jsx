@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
     ClockIcon, PlusIcon, MinusIcon, XIcon, GhostIcon, 
     NinjaIcon, ResetIcon, ClipboardIcon, BrainIcon, KeyboardIcon,
@@ -25,6 +25,25 @@ const TitleBar = ({
     checkForUpdates,
     updateStatus
 }) => {
+    const [missingPerms, setMissingPerms] = useState([]);
+
+    const refreshPermissions = useCallback(async () => {
+        if (window.electron?.platform !== 'darwin' || !window.electron?.checkPermissions) return;
+        try {
+            const status = await window.electron.checkPermissions();
+            const missing = [];
+            if (!status.screen) missing.push('Screen');
+            if (!status.microphone) missing.push('Mic');
+            if (!status.accessibility) missing.push('Accessibility');
+            setMissingPerms(missing);
+        } catch (e) {
+            // Ignore permission check errors
+        }
+    }, []);
+
+    useEffect(() => {
+        refreshPermissions();
+    }, [refreshPermissions]);
 
     return (
         <div 
@@ -76,6 +95,16 @@ const TitleBar = ({
                         </button>
                     </Tooltip>
 
+                    {missingPerms.length > 0 && (
+                        <Tooltip content={`Missing macOS permissions: ${missingPerms.join(', ')} (click to refresh)`} side="bottom">
+                            <button
+                                onClick={refreshPermissions}
+                                className="text-amber-400/90 hover:text-amber-300 hover:bg-white/10 rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
+                            >
+                                Perms ({missingPerms.length})
+                            </button>
+                        </Tooltip>
+                    )}
 
                 </div>
             </div>

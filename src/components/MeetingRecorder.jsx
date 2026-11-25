@@ -81,32 +81,45 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
                 throw new Error("Electron Audio API not found");
             }
 
-            const response = await window.electron.getAudioSources();
-            if (!response.success) throw new Error(response.error);
-
-            // Default to first source (Primary Screen)
-            const sourceId = response.sources[0]?.id;
-            if (!sourceId) throw new Error("No screen source found for audio");
+            // 1. Request microphone permission if supported (macOS)
+            if (window.electron.requestMicPermission) {
+                await window.electron.requestMicPermission();
+            }
 
             // 2. Get Streams
-            const desktopStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        chromeMediaSourceId: sourceId
+            let desktopStream = null;
+            if (window.electron.platform === 'darwin') {
+                desktopStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: true
+                });
+            } else {
+                const response = await window.electron.getAudioSources();
+                if (!response.success) throw new Error(response.error);
+
+                // Default to first source (Primary Screen)
+                const sourceId = response.sources[0]?.id;
+                if (!sourceId) throw new Error("No screen source found for audio");
+
+                desktopStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        mandatory: {
+                            chromeMediaSource: 'desktop',
+                            chromeMediaSourceId: sourceId
+                        }
+                    },
+                    video: {
+                        mandatory: {
+                            chromeMediaSource: 'desktop',
+                            chromeMediaSourceId: sourceId
+                        }
                     }
-                },
-                video: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        chromeMediaSourceId: sourceId
-                    }
-                }
-            });
+                });
+            }
 
             const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            streamsRef.current = [desktopStream, micStream];
+            streamsRef.current = [desktopStream, micStream].filter(Boolean);
 
             // 3. Mix Streams logic
             let finalStream;
@@ -115,18 +128,22 @@ const MeetingRecorder = ({ onRecordingComplete }) => {
             const ctx = new AudioContext();
             audioContextRef.current = ctx;
             const dest = ctx.createMediaStreamDestination();
-            
-            const desktopSource = ctx.createMediaStreamSource(desktopStream);
+
+            if (desktopStream && desktopStream.getAudioTracks().length > 0) {
+                const desktopSource = ctx.createMediaStreamSource(desktopStream);
+                desktopSource.connect(dest);
+            } else {
+                console.warn('No system audio track available; recording microphone only.');
+            }
+
             const micSource = ctx.createMediaStreamSource(micStream);
-            
-            desktopSource.connect(dest);
             micSource.connect(dest);
 
             const mixedAudioTrack = dest.stream.getAudioTracks()[0];
 
             if (selectedMode === 'video') {
-                const videoTrack = desktopStream.getVideoTracks()[0];
-                finalStream = new MediaStream([videoTrack, mixedAudioTrack]);
+                const videoTrack = desktopStream?.getVideoTracks()[0];
+                finalStream = videoTrack ? new MediaStream([videoTrack, mixedAudioTrack]) : new MediaStream([mixedAudioTrack]);
             } else {
                 finalStream = new MediaStream([mixedAudioTrack]);
             }

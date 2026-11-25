@@ -106,8 +106,88 @@ function getAsyncKeyState(vKey) {
     return GetAsyncKeyState(vKey);
 }
 
+let ghostTypingInterval = null;
+
+function startGhostTyping(onKey) {
+    if (ghostTypingInterval) return true;
+
+    const keyStates = new Array(256).fill(false);
+    const keyCounters = new Array(256).fill(0);
+    const vKeys = [
+        0x08, 0x0D, 0x20,
+        ...Array.from({ length: 10 }, (_, i) => 0x30 + i),
+        ...Array.from({ length: 26 }, (_, i) => 0x41 + i),
+        0xBE, 0xBC, 0xBF, 0xBB, 0xBD,
+    ];
+
+    ghostTypingInterval = setInterval(() => {
+        vKeys.forEach(vKey => {
+            const state = getAsyncKeyState(vKey);
+            const isPressed = (state & 0x8000) !== 0;
+
+            if (isPressed) {
+                const shift = getAsyncKeyState(0x10) !== 0;
+                if (!keyStates[vKey]) {
+                    keyStates[vKey] = true;
+                    keyCounters[vKey] = 0;
+                    onKey({ vKey, text: vKeyToChar(vKey, shift) });
+                } else {
+                    keyCounters[vKey]++;
+                    if (keyCounters[vKey] > 15 && (keyCounters[vKey] - 15) % 2 === 0) {
+                        onKey({ vKey, text: vKeyToChar(vKey, shift) });
+                    }
+                }
+            } else {
+                keyStates[vKey] = false;
+                keyCounters[vKey] = 0;
+            }
+        });
+    }, 30);
+
+    return true;
+}
+
+function stopGhostTyping() {
+    if (ghostTypingInterval) {
+        clearInterval(ghostTypingInterval);
+        ghostTypingInterval = null;
+    }
+    return true;
+}
+
+function getCodeRunCommand(lang, fileName) {
+    if (lang === 'python' || lang === 'py') {
+        return {
+            fileExt: 'py',
+            compileCmd: '',
+            runCmd: `python ${fileName}.py < input.txt`
+        };
+    }
+    if (lang === 'cpp' || lang === 'c++') {
+        return {
+            fileExt: 'cpp',
+            compileCmd: `g++ -O3 ${fileName}.cpp -o ${fileName}.exe`,
+            runCmd: `${fileName}.exe < input.txt`
+        };
+    }
+    return null;
+}
+
+function checkPermissions() {
+    return { screen: true, microphone: true, accessibility: true };
+}
+
+async function requestMicPermission() {
+    return true;
+}
+
 module.exports = {
     toggleStealthMode,
     vKeyToChar,
-    getAsyncKeyState
+    getAsyncKeyState,
+    startGhostTyping,
+    stopGhostTyping,
+    getCodeRunCommand,
+    checkPermissions,
+    requestMicPermission
 };

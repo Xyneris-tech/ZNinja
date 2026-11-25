@@ -30,10 +30,13 @@ jobs:
         run: npm run build -- --mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ZNinja-macOS
-          # Grabs the compiled .dmg file from the dist directory or any subfolders (like dist/mac/)
-          path: dist/**/*.dmg
+          # Grabs the compiled .dmg and .zip files from the dist directory
+          path: |
+            dist/**/*.dmg
+            dist/**/*.zip

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, globalShortcut, clipboard, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, globalShortcut, clipboard, dialog, session } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 const fs = require('fs');
@@ -58,6 +58,7 @@ function createWindow() {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
     win.on('closed', () => {
+        native.stopGhostTyping();
         if (!helperWin.isDestroyed()) helperWin.close();
     });
 
@@ -215,6 +216,14 @@ function createWindow() {
         return native.toggleStealthMode(win, shouldEnable);
     });
 
+    ipcMain.handle('check-permissions', () => {
+        return native.checkPermissions();
+    });
+
+    ipcMain.handle('request-mic-permission', () => {
+        return native.requestMicPermission();
+    });
+
     ipcMain.on('minimize-app', () => win.hide());
     ipcMain.on('close-app', () => app.quit());
 
@@ -339,14 +348,12 @@ function createWindow() {
         let fileName = 'solution';
 
         const lang = language.toLowerCase();
-        
-        if (lang === 'python' || lang === 'py') {
-            fileExt = 'py';
-            runCmd = `python ${fileName}.py < input.txt`;
-        } else if (lang === 'cpp' || lang === 'c++') {
-            fileExt = 'cpp';
-            compileCmd = `g++ -O3 ${fileName}.cpp -o ${fileName}.exe`;
-            runCmd = `${fileName}.exe < input.txt`;
+        const platformCmd = native.getCodeRunCommand(lang, fileName);
+
+        if (platformCmd) {
+            fileExt = platformCmd.fileExt;
+            compileCmd = platformCmd.compileCmd;
+            runCmd = platformCmd.runCmd;
         } else if (lang === 'java') {
             let className = 'Main';
             const publicClassMatch = code.match(/\bpublic\s+class\s+(\w+)/);
@@ -450,56 +457,15 @@ function createWindow() {
     });
 
     // Ghost Typing
-    let ghostTypingInterval = null;
     ipcMain.handle('set-ghost-typing', (event, active) => {
-        if (active && !ghostTypingInterval) {
-            const keyStates = new Array(256).fill(false);
-            const keyCounters = new Array(256).fill(0);
-
-            ghostTypingInterval = setInterval(() => {
-                // Monitor A-Z (0x41-0x5A), 0-9 (0x30-0x39), Space (0x20), Backspace (0x08), Enter (0x0D), Symbols
-                const vKeys = [
-                    0x08, 0x0D, 0x20,
-                    ...Array.from({ length: 10 }, (_, i) => 0x30 + i),
-                    ...Array.from({ length: 26 }, (_, i) => 0x41 + i),
-                    0xBE, 0xBC, 0xBF, 0xBB, 0xBD,
-                ];
-
-                vKeys.forEach(vKey => {
-                    const state = native.getAsyncKeyState(vKey);
-                    const isPressed = (state & 0x8000) !== 0;
-
-                    if (isPressed) {
-                        if (!keyStates[vKey]) {
-                            // Initial Press
-                            keyStates[vKey] = true;
-                            keyCounters[vKey] = 0;
-                            win.webContents.send('ghost-key', {
-                                vKey,
-                                text: native.vKeyToChar(vKey, native.getAsyncKeyState(0x10) !== 0)
-                            });
-                        } else {
-                            // Key Held Down - Repeat Logic
-                            keyCounters[vKey]++;
-                            // Initial delay: 15 ticks * 30ms = 450ms, Repeat: 2 ticks = 60ms
-                            if (keyCounters[vKey] > 15 && (keyCounters[vKey] - 15) % 2 === 0) {
-                                win.webContents.send('ghost-key', {
-                                    vKey,
-                                    text: native.vKeyToChar(vKey, native.getAsyncKeyState(0x10) !== 0)
-                                });
-                            }
-                        }
-                    } else {
-                        keyStates[vKey] = false;
-                        keyCounters[vKey] = 0;
-                    }
-                });
-            }, 30);
-        } else if (!active && ghostTypingInterval) {
-            clearInterval(ghostTypingInterval);
-            ghostTypingInterval = null;
+        if (active) {
+            return native.startGhostTyping((payload) => {
+                if (!win.isDestroyed()) {
+                    win.webContents.send('ghost-key', payload);
+                }
+            });
         }
-        return true;
+        return native.stopGhostTyping();
     });
 
     return win;
@@ -508,7 +474,19 @@ function createWindow() {
 app.setName('Service Host: Runtime');
 
 app.whenReady().then(() => {
-    if (process.platform === 'darwin') app.dock.hide();
+    if (process.platform === 'darwin') {
+        app.dock.hide();
+
+        session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+            try {
+                const sources = await desktopCapturer.getSources({ types: ['screen'] });
+                callback({ video: sources[0], audio: 'loopback' });
+            } catch (err) {
+                console.error('Display media request handler error:', err);
+                callback({});
+            }
+        });
+    }
     
     // Shortcuts
     app.on('will-quit', () => globalShortcut.unregisterAll());

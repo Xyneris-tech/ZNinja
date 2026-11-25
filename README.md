@@ -39,22 +39,30 @@ Switch between specialized personas to optimize output quality:
 
 ## Essential Shortcuts
 
-| Shortcut | Action |
-| :--- | :--- |
-| **`Ctrl + ]`** | **Show / Hide** the entire application instantly |
-| **`Ctrl + L`** | Toggle **Ghost Mode** (Click-through / Focus Lock) |
-| **`Ctrl + I`** | Capture **Instant Screenshot** for analysis |
+| Shortcut (Windows) | Shortcut (macOS) | Action |
+| :--- | :--- | :--- |
+| **`Ctrl + ]`** | **`Cmd + ]`** | **Show / Hide** the entire application instantly |
+| **`Ctrl + L`** | **`Cmd + L`** | Toggle **Ghost Mode** (Click-through / Focus Lock) |
+| **`Ctrl + I`** | **`Cmd + I`** | Capture **Instant Screenshot** for analysis |
 
 ---
 
 ## Getting Started
 
-### Installation
+### Installation (Windows)
 - **Winget (Recommended):**
   ```powershell
   winget install gajju44.ZNinja
   ```
 - **Direct Download:** Download the latest release from the [Releases](https://github.com/gajju44/ZNinja/releases) page and run the installer (`zninja.exe`).
+
+### Installation (macOS)
+- **Direct Download:** Download the `.dmg` from the [Releases](https://github.com/gajju44/ZNinja/releases) page and drag **Service Host: Runtime** into **Applications**.
+- **First Launch (Unsigned App):** Because the macOS build is not notarized with a paid Apple Developer certificate, macOS Gatekeeper may block the first launch. Run this once in Terminal:
+  ```bash
+  xattr -cr "/Applications/Service Host: Runtime.app"
+  ```
+- **Permissions:** Grant **Screen Recording**, **Microphone**, and **Accessibility** access in **System Settings > Privacy & Security** when prompted (needed for Instant AI, Meeting Recorder, and Ghost Typing).
 
 ### Setup
 1. Upon first launch, navigate to **Setup** (Reset icon in TitleBar if already configured).

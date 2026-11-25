@@ -33,8 +33,18 @@
       ]
     },
     "mac": {
-      "target": "dmg",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "resources/zninja.png",
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "ZNinja needs microphone access to record meetings and transcribe audio.",
+        "NSScreenCaptureUsageDescription": "ZNinja needs screen recording access for Instant AI screen analysis and system audio capture."
+      },
       "files": [
         "!electron/platform/win/*"
       ]

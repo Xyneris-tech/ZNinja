@@ -1,6 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
+    platform: process.platform,
+    checkPermissions: () => ipcRenderer.invoke('check-permissions'),
+    requestMicPermission: () => ipcRenderer.invoke('request-mic-permission'),
     toggleStealth: (shouldEnable) => ipcRenderer.invoke('toggle-stealth', shouldEnable),
     listModels: () => ipcRenderer.invoke('list-models'),
     askGemini: (data) => ipcRenderer.invoke('ask-gemini', data),
